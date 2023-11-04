@@ -1,2 +1,2 @@
 # go-notes
-record what I have learned during use of go
+记录工作中使用go的一些经验
