@@ -1,7 +1,7 @@
 package performance_test
 
 import (
-	p "go-notes/for_and_range/performance"
+	p "go-notes/for-and-range/performance"
 	"testing"
 )
 
