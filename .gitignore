@@ -1,0 +1,10 @@
+.idea/*
+.vscode/*
+build/
+./Dockerfile
+vendor/
+.scannerwork/*
+runtime/
+.DS_Store
+
+
