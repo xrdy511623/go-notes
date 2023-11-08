@@ -1,8 +1,7 @@
-package performance_test
+package performance
 
 import (
 	"fmt"
-	p "go-notes/string-concat/performance"
 	"strings"
 	"testing"
 )
@@ -26,16 +25,16 @@ string.Builder 也提供了预分配内存的方式 Grow
 内存消耗减半。
 */
 
-func BenchmarkPlusConcat(b *testing.B)       { p.Benchmark(b, p.PlusConcat) }
-func BenchmarkSprintfConcat(b *testing.B)    { p.Benchmark(b, p.SprintfConcat) }
-func BenchmarkBuilderConcat(b *testing.B)    { p.Benchmark(b, p.BuilderConcat) }
-func BenchmarkBufferConcat(b *testing.B)     { p.Benchmark(b, p.BufferConcat) }
-func BenchmarkByteConcat(b *testing.B)       { p.Benchmark(b, p.ByteConcat) }
-func BenchmarkPreByteConcat(b *testing.B)    { p.Benchmark(b, p.PreByteConcat) }
-func BenchmarkPreBuilderConcat(b *testing.B) { p.Benchmark(b, p.PreBuilderConcat) }
+func BenchmarkPlusConcat(b *testing.B)       { Benchmark(b, PlusConcat) }
+func BenchmarkSprintfConcat(b *testing.B)    { Benchmark(b, SprintfConcat) }
+func BenchmarkBuilderConcat(b *testing.B)    { Benchmark(b, BuilderConcat) }
+func BenchmarkBufferConcat(b *testing.B)     { Benchmark(b, BufferConcat) }
+func BenchmarkByteConcat(b *testing.B)       { Benchmark(b, ByteConcat) }
+func BenchmarkPreByteConcat(b *testing.B)    { Benchmark(b, PreByteConcat) }
+func BenchmarkPreBuilderConcat(b *testing.B) { Benchmark(b, PreBuilderConcat) }
 
 func TestBuilderConcat(t *testing.T) {
-	var str = p.RandomString(10)
+	var str = RandomString(10)
 	var builder strings.Builder
 	capacity := 0
 	for i := 0; i < 10000; i++ {

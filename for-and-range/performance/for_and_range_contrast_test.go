@@ -1,7 +1,6 @@
-package performance_test
+package performance
 
 import (
-	p "go-notes/for-and-range/performance"
 	"testing"
 )
 
@@ -12,7 +11,7 @@ type Item struct {
 
 // 当遍历对象时int数组(切片)时，for与range相比几乎没有性能差异
 func BenchmarkForIntSlice(b *testing.B) {
-	nums := p.GenerateWithCap(1024 * 1024)
+	nums := GenerateWithCap(1024 * 1024)
 	for i := 0; i < b.N; i++ {
 		length := len(nums)
 		var tmp int
@@ -24,7 +23,7 @@ func BenchmarkForIntSlice(b *testing.B) {
 }
 
 func BenchmarkRangeIntSlice(b *testing.B) {
-	nums := p.GenerateWithCap(1024 * 1024)
+	nums := GenerateWithCap(1024 * 1024)
 	for i := 0; i < b.N; i++ {
 		var tmp int
 		for _, num := range nums {
