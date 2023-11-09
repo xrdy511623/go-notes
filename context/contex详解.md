@@ -549,6 +549,9 @@ func WithValue(parent Context, key, val interface{}) Context {
 对 key 的要求是可比较，因为之后需要通过 key 取出 context 中的值，可比较是必须的。
 通过层层传递 context，最终形成这样一棵树：
 
+![context.png](context.png)
+
+
 和链表有点像，只是它的方向相反：Context 指向它的父节点，链表则指向下一个节点。通过 WithValue 函数，可以创建层层
 的 valueCtx，存储 goroutine 间可以共享的变量。 取值的过程，实际上是一个递归查找的过程：
 
