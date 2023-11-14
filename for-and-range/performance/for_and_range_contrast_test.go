@@ -9,7 +9,7 @@ type Item struct {
 	val [4096]byte
 }
 
-// 当遍历对象时int数组(切片)时，for与range相比几乎没有性能差异
+// 当遍历对象是int数组(切片)时，for与range相比几乎没有性能差异
 func BenchmarkForIntSlice(b *testing.B) {
 	nums := GenerateWithCap(1024 * 1024)
 	for i := 0; i < b.N; i++ {
