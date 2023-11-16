@@ -143,3 +143,59 @@ go mod download 下载模块到本地缓存
 tidy  增加需要的依赖，删除不需要的依赖
 
 git commit提交代码前尽量执行下go mod tidy，减少构建时无效依赖包的拉取。
+
+2.4 > 案例分析
+
+case 1 执行go get -u xxx后项目编译不通过。
+直接原因: 升级了github.com/apache/thrift但是0.14.x与0.13.x两个版本不兼容
+根本原因: 在执行go get时错误使用了-u参数更新了依赖的依赖。
+![go-get-case.png](images%2Fgo-get-case.png)
+
+经验: 如无必要，不使用-u参数
+
+case 2 为什么一些工程不使用go mod?
+![go-mod-indirect.png](images%2Fgo-mod-indirect.png)
+
+出现indirect的原因是:
+在go mod推广前，major版本已>1
+便于go get拉到v3版本
+
+经验: 在复杂的业务场景中，新项目尽量不使用>1的major版本号
+
+case 3 部分项目不适用go mod导致的复杂场景: 最终参与编译的x是v1还是v2?
+![complex-case.png](images%2Fcomplex-case.png)
+
+在A没有依赖C的情况下，会使用x的v2版本；
+但由于C的存在，使得x的依赖被指定为了v1版本。
+
+经验:
+无论依赖库是否使用go mod，我们得项目中都应该使用go mod；
+特殊情况可以手动指定indirect依赖。
+
+case 4 删除tag/branch/commit后导致依赖报错，无法通过编译
+![case-tag.png](images%2Fcase-tag.png)
+
+如何解决？
+若只有本项目依赖，在删除go.mod/go.sum中的条目后，go get更新到最新tag;
+若依赖项中也依赖，则replace该依赖至正常tag，彻底解决需go get更新依赖链路上的所有项目到最新tag；
+
+更可怕的是，删除tag后在另外一个commit上重新打相同的tag...
+这时只能清理本地缓存，重新拉取。
+
+case5 循环依赖陷阱
+循环依赖如何产生？
+两个package之间是不能互相import导入的；
+但两个不同工程的不同package之间是可以互相import的。
+![loop.png](images%2Floop.png)
+
+循环依赖一旦形成，内部所有依赖的所有版本都会一直保留。
+
+a> 某基础库A与基础库B存在循环依赖，且依赖链中B的某个版本依赖了A的某个分支上上的commit。某天，A的该分支
+在清理分支时被删除，导致众多项目无法编译上线。
+
+![loop-one.png](images%2Floop-one.png)
+
+b> 某团队内部俩公共库A、B存在循环依赖，此时某基础库C的某版本存在高风险bug，为收敛问题删除了一些tag，导致两个
+公共库被迫replace掉依赖C，且所有依赖该基础库的服务都需要更新依赖，尽管C的那个有问题的版本已经不再被A、B依赖。
+
+经验: 公共库之间应该分工明确，避免大杂烩，避免循环依赖。
