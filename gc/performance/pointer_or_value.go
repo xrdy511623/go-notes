@@ -1,8 +1,30 @@
-package main
+package performance
+
+type Person struct {
+	id   int
+	age  int
+	name string
+}
 
 type Item struct {
 	id  int
 	val [40960]int
+}
+
+func newPersonValueSlice(n int) []Person {
+	s := make([]Person, n)
+	for i := 0; i < n; i++ {
+		s[i] = Person{}
+	}
+	return s
+}
+
+func newPersonPointerSlice(n int) []*Person {
+	s := make([]*Person, n)
+	for i := 0; i < n; i++ {
+		s[i] = &Person{}
+	}
+	return s
 }
 
 func newItemValueSlice(n int) []Item {
@@ -25,17 +47,4 @@ func newItemPointerSlice(n int) []*Item {
 		}
 	}
 	return s
-}
-
-func MakeSlice() {
-	s := make([]int, 10000, 10000)
-	for i := range s {
-		s[i] = i
-	}
-}
-
-func main() {
-	MakeSlice()
-	newItemValueSlice(10000)
-	newItemPointerSlice(10000)
 }
