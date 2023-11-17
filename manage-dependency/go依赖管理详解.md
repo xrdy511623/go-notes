@@ -7,7 +7,7 @@ go依赖管理详解
 工程项目不可能基于标准库0~1编码搭建
 管理依赖库
 
-2 Go依赖管理严禁
+2 Go依赖管理演进
 GOPATH -> Go Vendor -> Go Module
 
 2.1 > GOPATH
