@@ -111,3 +111,30 @@ func BenchmarkRangePointer(b *testing.B) {
 		_ = tmp
 	}
 }
+
+/*
+当我们事先不知道切片的长度时，如果for循环遍历时预先计算出切片的长度，而不是每次循环都去计算长度比较下标是否越界，
+可以提升性能，在本案例中，性能提升了大约7.3%。
+go test -bench=Loop$ -benchmem -count=3 .
+goos: darwin
+goarch: arm64
+pkg: go-notes/for-and-range/performance
+BenchmarkNormalLoop-8           1000000000               0.0004530 ns/op               0 B/op          0 allocs/op
+BenchmarkNormalLoop-8           1000000000               0.0004086 ns/op               0 B/op          0 allocs/op
+BenchmarkNormalLoop-8           1000000000               0.0004117 ns/op               0 B/op          0 allocs/op
+BenchmarkEnhanceLoop-8          1000000000               0.0004090 ns/op               0 B/op          0 allocs/op
+BenchmarkEnhanceLoop-8          1000000000               0.0003769 ns/op               0 B/op          0 allocs/op
+BenchmarkEnhanceLoop-8          1000000000               0.0003943 ns/op               0 B/op          0 allocs/op
+PASS
+ok      go-notes/for-and-range/performance      0.444s
+*/
+
+var s = GenerateWithCap(1000000)
+
+func BenchmarkNormalLoop(b *testing.B) {
+	NormalLoop(s)
+}
+
+func BenchmarkEnhanceLoop(b *testing.B) {
+	EnhanceLoop(s)
+}
