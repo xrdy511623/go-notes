@@ -90,6 +90,20 @@ alloc_space   程序累计申请的内存大小；
 inuse_objects 程序当前持有的对象数；
 inuse_space   程序当前占用的内存大小
 
+如果要查看这些内存指标数据，可以这样操作：
+
+```shell
+go tool pprof -seconds=30 "http://localhost:6060/debug/allocs"
+```
+然后输入o查看sample_index的可选值。
+
+
+比如你想看alloc_space，也就是程序累计申请的内存大小，那么可以这样：
+```shell
+sample_index=alloc_space
+top 10
+```
+
 > 协程(goroutine)
 
 接下来我们排查程序的协程问题，通过下面的指令查看当前的协程数据
