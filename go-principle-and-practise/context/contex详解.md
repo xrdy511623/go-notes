@@ -3,7 +3,7 @@
 context详解
 ---
 
-1 什么是 context?
+1 > 什么是 context?
 Go 1.7 标准库引入 context，中文译作“上下文”，准确说它是 goroutine 的上下文，包含 goroutine 的运行状态、环境、现场等信息。
 context 主要用来在 goroutine 之间传递上下文信息，包括：取消信号、超时时间、截止时间、k-v 等。
 随着 context 包的引入，标准库中很多接口因此加上了 context 参数，例如 database/sql 包。context 几乎成为了并发控制和超时控制的标准做法。
@@ -549,7 +549,7 @@ func WithValue(parent Context, key, val interface{}) Context {
 对 key 的要求是可比较，因为之后需要通过 key 取出 context 中的值，可比较是必须的。
 通过层层传递 context，最终形成这样一棵树：
 
-![context.png](context.png)
+![context.png](images/context.png)
 
 
 和链表有点像，只是它的方向相反：Context 指向它的父节点，链表则指向下一个节点。通过 WithValue 函数，可以创建层层
