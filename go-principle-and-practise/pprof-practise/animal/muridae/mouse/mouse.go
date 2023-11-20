@@ -1,7 +1,7 @@
 package mouse
 
 import (
-	"go-notes/pprof-practise/constant"
+	"go-notes/go-principle-and-practise/pprof-practise/constant"
 	"log"
 )
 

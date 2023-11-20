@@ -1,4 +1,4 @@
-package atomic_replace_mutex
+package atomicreplacemutex
 
 import (
 	"sync"

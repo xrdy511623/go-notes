@@ -1,6 +1,6 @@
 package canidae
 
-import "github.com/wolfogre/go-pprof-practice/animal"
+import "go-notes/go-principle-and-practise/pprof-practise/animal"
 
 type Canidae interface {
 	animal.Animal

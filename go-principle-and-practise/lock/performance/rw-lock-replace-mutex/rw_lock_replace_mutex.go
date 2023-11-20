@@ -1,4 +1,4 @@
-package rw_lock_replace_mutex
+package rwlockreplacemutex
 
 import (
 	"sync"

@@ -1,4 +1,4 @@
-package segment_lock_replace_global_lock
+package segmentlockreplacegloballock
 
 import "sync"
 

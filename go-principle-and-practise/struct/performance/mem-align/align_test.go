@@ -1,4 +1,4 @@
-package mem_align
+package memalign
 
 import "testing"
 

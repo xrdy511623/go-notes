@@ -1,7 +1,7 @@
 package main
 
 import (
-	"go-notes/pprof-practise/animal"
+	"go-notes/go-principle-and-practise/pprof-practise/animal"
 	"log"
 	"net/http"
 	_ "net/http/pprof"

@@ -1,4 +1,4 @@
-package narrow_critical_space
+package narrowcriticalspace
 
 import (
 	"sync"
