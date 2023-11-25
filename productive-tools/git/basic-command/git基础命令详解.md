@@ -93,7 +93,7 @@ git commit -am "initial commit"
 
 # 如果commit的备注信息写错了，但是还没有push推送到远程，可以使用以下命令进行修改
 git commit --amend --only
-这会打开你的默认编辑器, 在这里你可以编辑信息. 另一方面, 你也可以用一条命令一次完成:
+# 这会打开你的默认编辑器, 在这里你可以编辑信息. 另一方面, 你也可以用一条命令一次完成:
 git commit --amend --only -m 'xxxxxxx'
 
 # 修改提交的用户名和邮箱
@@ -105,12 +105,12 @@ git add -A
 git commit --amend
 
 # 我意外的做了一次硬重置(hard reset)，我想找回我的内容
-#如果你意外的做了 git reset --hard, 你通常能找回你的提交(commit), 因为Git对每件事都会有日志，且都会保存几天。
+# 如果你意外的做了 git reset --hard, 你通常能找回你的提交(commit), 因为Git对每件事都会有日志，且都会保存几天。
 git reflog
 # 你将会看到一个你过去提交(commit)的列表, 和一个重置的提交。 选择你想要回到的提交(commit)的SHA，再重置一次:
 git reset --hard commit_id
 
-我想把未暂存的内容移动到另一个已存在的分支new_branch
+# 我想把未暂存的内容移动到另一个已存在的分支new_branch
 git stash
 git checkout new_branch
 git stash pop
