@@ -1,0 +1,415 @@
+
+---
+详解binlog日志、undo日志和redo日志
+---
+
+> redo log 重做日志
+
+为了避免更新操作时频繁的写磁盘，MySQL使用了WAL(write ahead log)技术，也就是先写日志，后写磁盘。
+具体来说，当有一条记录需要更新时，InnoDB引擎就会先把记录写到redo log里面，并更新内存(buffer pool)，这个时候就算
+更新完成了。同时，InnoDB引擎会在适当的时候，将这个操作记录更新到磁盘里面，而这个更新时机往往是在系统比较空闲的时候。
+redo log日志是固定大小，顺序写入的，如果写满了会从头开始写，也就是会覆盖旧的日志。
+也就是说 redo log 只会记录未刷盘的日志，已经刷入磁盘的数据都会从redo log 这个有限大小的日志文件里删除。
+redo log重做日志主要功能就是在数据库异常重启后，可以根据它将之前提交的事务的修改记录恢复数据，这就是crash-safe，也就是崩溃恢复能力。
+innodb_flush_log_at_trx_commit这个参数设置为1表示每次事务的redo log重做日志都直接持久化到磁盘，如此可以确保MySQL异常重启后数据不丢失。
+
+
+> binlog 归档日志
+
+
+
+
+
+![binlog-pos.png](images%2Fbinlog-pos.png)
+
+
+
+
+
+![binlog-detail.png](images%2Fbinlog-detail.png)
+
+
+
+
+
+![binlog-detail-finish.png](images%2Fbinlog-detail-finish.png)
+
+
+
+
+
+现在，我们来看一下上图的输出结果。
+- 第一行 SET @@SESSION.GTID_NEXT='ANONYMOUS’你可以先忽略，后面文章我们会在介绍主备切换的时候再提到；
+- 第二行是一个 BEGIN，跟第四行的 commit 对应，表示中间是一个事务；
+- 第三行就是真实执行的语句了。可以看到，在真实执行的 delete 命令之前，还有一个“use ‘sexmsg’”命令。这条命令不是
+- 我们主动执行的，而是 MySQL 根据当前要操作的表所在的数据库，自行添加的。这样做可以保证日志传到备库去执行的时候，
+- 不论当前的工作线程在哪个库里，都能够正确地更新到 sexmsg 库的表 t。 use 'test’命令之后的 delete 语句，就是我们输入
+- 的 SQL 原文了。可以看到，binlog“忠实”地记录了 SQL 命令，甚至连注释也一并记录了。
+- 最后一行是一个 COMMIT。你可以看到里面写着 xid=16。
+
+
+
+
+
+![binlog-warning.png](images%2Fbinlog-warning.png)
+
+
+
+
+
+可以看到，运行这条 delete 命令产生了一个 warning，原因是当前 binlog 设置的是 statement 格式，并且语句中有 limit，所以这个
+命令可能是 unsafe 的。
+为什么这么说呢？这是因为 delete 带 limit，很可能会出现主备数据不一致的情况。比如上面这个例子：
+1. 如果 delete 语句使用的是索引 a，那么会根据索引 a 找到第一个满足条件的行，也就是说删除的是 a=4 这一行；
+2. 但如果使用的是索引 t_modified，那么删除的就是 t_modified='2018-11-09’也就是 a=5 这一行。
+   由于 statement 格式下，记录到 binlog 里的是语句原文，因此可能会出现这样一种情况：在主库执行这条 SQL 语句的时候，用的是索引 a；
+3. 而在备库执行这条 SQL 语句的时候，却使用了索引 t_modified。因此，MySQL 认为这样写是有风险的。
+
+那么，如果我把 binlog 的格式改为 binlog_format=‘row’， 是不是就没有这个问题了呢？我们先来看看这时候 binlog 中的内容吧。
+
+
+
+
+
+![row-binlog.png](images%2Frow-binlog.png)
+
+
+
+
+
+![row-binlog-more.png](images%2Frow-binlog-more.png)
+
+
+
+
+
+可以看到，与 statement 格式的 binlog 相比，前后的 BEGIN 和 COMMIT 是一样的。但是，row 格式的 binlog 里没有了
+SQL 语句的原文，而是替换成了两个 event：Table_map 和 Delete_rows。
+1. Table_map event，用于说明接下来要操作的表是 test 库的表 t;
+2. Delete_rows event，用于定义删除的行为。 
+其实，我们通过show binlog events 是看不到详细信息的，还需要借助 mysqlbinlog 工具，用下面这个命令解析和查看
+binlog 中的内容。因为show binlog events的结果信息显示，这个事务的 binlog 是从 2201这个位置开始的，所以可以用
+start-position 参数来指定从这个位置的日志开始解析。
+
+```shell
+sudo mysqlbinlog -vv mysql-bin.000003 --start-position=2201;
+```
+
+
+
+
+
+![parse-row-binlog.png](images%2Fparse-row-binlog.png)
+
+
+
+
+
+![parse-row-binlog-finish.png](images%2Fparse-row-binlog-finish.png)
+
+
+
+
+
+从这个图中，我们可以看到以下几个信息：
+- server id 1，表示这个事务是在 server_id=1 的这个库上执行的。
+- 每个 event 都有 CRC32 的值，这是因为我把参数 binlog_checksum 设置成了 CRC32。
+- Table_map event 跟在show binlog events结果图中看到的相同，显示了接下来要打开的表，map 到数字 88。现在我们这条
+- SQL 语句只操作了一张表，如果要操作多张表呢？每个表都有一个对应的 Table_map event、都会 map 到一个单独的数字，用于区分对不同表的操作。
+- 我们在 mysqlbinlog 的命令中，使用了 -vv 参数是为了把内容都解析出来，所以从结果里面可以看到各个字段的值（比如，@1=4、 @2=4 这些值）。
+- 从DELETE FROM 'test.t' WHERE@1=4，@2=4，@3=1541779200可以看出这个日志精确地记录了删除的是WHERE id=4,a=4, t_modified=1541779200
+- (也就是’2018-11-10‘)这一行数据。
+- binlog_row_image 的默认配置是 FULL，因此 Delete_event 里面，包含了删掉的行的所有字段的值。如果把 binlog_row_image 设置为 MINIMAL，
+- 则只会记录必要的信息，在这个例子里，就是只会记录 id=4 这个信息。
+- 最后的 Xid event(Xid=27)，用于表示事务被正确地提交了。
+  可以看到，当 binlog_format 使用 row 格式的时候，binlog 里面记录了真实删除行的主键 id，这样 binlog 传到备库去的时候，就肯定会删除 id=4 的行，
+- 不会有主备删除不同行的问题。
+
+
+> 为什么会有 mixed 格式的 binlog？
+
+基于上面的信息，我们来讨论一个问题：为什么会有 mixed 这种 binlog 格式的存在场景？推论过程是这样的：
+- 因为有些 statement 格式的 binlog 可能会导致主备不一致，所以要使用 row 格式。
+- 但 row 格式的缺点是，很占空间。比如你用一个 delete 语句删掉 10 万行数据，用 statement 的话就是一个 SQL 
+- 语句被记录到 binlog 中，占用几十个字节的空间。但如果用 row 格式的 binlog，就要把这 10 万条记录都写到 binlog 中。
+- 这样做，不仅会占用更大的空间，同时写 binlog 也要耗费 IO 资源，影响执行速度。
+- 所以，MySQL 就取了个折中方案，也就是有了 mixed 格式的 binlog。mixed 格式的意思是，MySQL 自己会判断这条 SQL 语句
+- 是否可能引起主备不一致，如果有可能，就用 row 格式，否则就用 statement 格式。
+  也就是说，mixed 格式可以利用 statment 格式的优点，同时又避免了主备数据不一致的风险。
+  因此，如果你的线上 MySQL 设置的 binlog 格式是 statement 的话，那基本上就可以认为这是一个不合理的设置。你至少应该
+- 把 binlog 的格式设置为 mixed。
+  比如我们这个例子，设置为 mixed 后，就会记录为 row 格式；而如果执行的语句去掉 limit 1，就会记录为 statement 格式。
+
+
+> 为什么建议将binlog格式设置为row?
+
+现在越来越多的场景要求把 MySQL 的 binlog 格式设置成 row。这么做的理由有很多，我来给你举一个可以直接看出来的好处：恢复数据。
+接下来，我们就分别从 delete、insert 和 update 这三种 SQL 语句的角度，来看看数据恢复的问题。
+通过上图你可以看出来，即使我执行的是 delete 语句，row格式的 binlog 也会把被删掉的行的整行信息保存起来。所以，如果你在执行完一条
+delete 语句以后，发现删错数据了，可以直接把 binlog 中记录的 delete 语句转成 insert，把被错删的数据插入回去就可以恢复了。
+如果你是执行错了 insert 语句呢？那就更直接了。row 格式下，insert 语句的 binlog 里会记录所有的字段信息，这些信息可以用来
+精确定位刚刚被插入的那一行。这时，你直接把 insert 语句转成 delete 语句，删除掉这被误插入的一行数据就可以了。
+如果执行的是 update 语句的话，row格式的binlog 里面会记录修改前整行的数据和修改后的整行数据。所以，如果你误执行了 update 语句的话，
+只需要把这个 event 前后的两行信息对调一下，再去数据库里面执行，就能恢复这个更新操作了。
+
+
+注意：
+有人在重放 binlog 数据的时候，是这么做的：用 mysqlbinlog 解析出日志，然后把里面的 statement 语句直接拷贝出来执行。
+你现在知道了，这个方法是有风险的。因为有些语句的执行结果是依赖于上下文命令的，直接执行的结果很可能是错误的。
+所以，用 binlog 来恢复数据的标准做法是，用 mysqlbinlog 工具解析出来，然后把解析结果整个发给 MySQL 执行。类似下面的命令：
+
+```shell
+mysqlbinlog master.000001  --start-position=2738 --stop-position=2973 | mysql -h127.0.0.1 -P13000 -u$user -p$pwd;
+```
+
+这个命令的意思是，将 master.000001 文件里面从第 2738 字节到第 2973 字节中间这段内容解析出来，放到 MySQL 去执行。
+
+与redo log重做日志是引擎层所独有的日志不同(InnoDB引擎)，binlog归档日志是server层的日志，它主要用于增量备份恢复数据以及主从同步。
+binlog日志有三种格式，statement, row以及mixed
+statement格式的binlog，记录的是执行的SQL语句，也就是主库执行了什么SQL语句，binlog就记录什么SQL语句。
+其优点是因为只记录SQL语句，日志记录量较少，可以节约磁盘空间和网络IO。
+
+缺点是对于如UUID()之类的非确定性函数，或者走不同索引会造成主从库执行结果不同，导致主从数据不一致，因此生产环境一般不使用。
+
+row格式的binlog，记录的是每一行记录的增删改操作，若一条SQL语句修改了一千条记录，row格式的binlog便会分别记录一千条记录的修改。
+其优点是主从复制安全，不会出现主从数据不一致的问题。
+缺点是日志记录太多，比较消耗磁盘存储空间和网络IO。
+
+sync_binlog这个参数设置为1，表示每次事务的binlog日志都持久化到磁盘，如此可以保证MySQL异常重启后binlog日志不丢失。
+
+
+> redo log重做日志与binlog归档日志的区别
+
+redo log是InnoDB引擎所特有的，而binlog是MySQL的Server层实现的，所有引擎都可以使用。
+redo log是物理日志，记录的是在某个数据页上做了什么修改；而binlog是逻辑日志，记录的是这个语句的原始逻辑，比如给id=2这一行的字段c加1。
+redo log是循环写的，空间固定会用完，会有覆盖旧日志的问题；而binlog是追加写入的，写到一定大小后会切换到下一个日志，并不会覆盖以前的日志。
+
+
+> redo log重做日志与binlog归档日志结合使用与二阶段提交
+
+下面以一个简单的update语句为例，看看整个操作流程。
+
+
+
+
+
+![two-phrase-commit-one.png](images%2Ftwo-phrase-commit-one.png)
+
+
+
+
+
+那么在两阶段提交的不同瞬间，MySQL如果发生异常重启，是如何保证数据完整性的？
+
+
+
+
+
+![two-phrase-commit-two.png](images%2Ftwo-phrase-commit-two.png)
+
+
+
+
+
+如果在图中时刻A的地方，也就是写入redo log处于prepare阶段之后，写binlog之前，发生了崩溃(crash)，
+由于此时binlog还没写，redo log也还没提交，所以崩溃恢复时，这个事务会回滚。此时，binlog没写，所以也不会
+传到备库(从库)，因此不会出现主从数据不一致的问题。
+
+如果是在图中时刻B的地方，也就是binlog写完，redo log还没commit前发生了crash，那崩溃恢复的时候MySQL会怎么处理？
+我们先来看一下崩溃恢复时的判断规则：
+1 如果redo log里面的事务是完整的，也就是已经有了commit标识，则直接提交；
+2 如果redo log里面的事务只有完整的prepare, 则判断对应的事务binlog是否存在并完整；
+A 如果是，则提交事务；
+B 否则，回滚事务。
+这里，时刻B发生crash对应的就是2(a)的情况，崩溃恢复过程中事务会被提交。
+
+那么，就有了以下一系列问题
+
+
+> 追问1: MySQL是怎么知道binlog是完整的？
+
+我们知道，一个事务的binlog是有完整格式的:
+statement格式的binlog, 最后会有COMMIT;
+row格式的binlog，最后会有一个XID的event。
+
+另外，在MySQL5.6.2版本以后，还引入了binlog-checksum参数，用来验证binlog内容的正确性。对于binlog日志由于磁盘原因，
+可能会在日志中间出错的情况，MySQL可以通过校验checksum的结果来发现。所以，MySQL还是有办法验证事务binlog的完整性的。
+
+
+> 追问2: redo log和binlog是怎么关联起来的？
+
+因为它们有一个共同的数据字段，叫作XID。崩溃恢复时，会按照顺序扫描redo log：
+如果碰到既有prepare，又有commit的redo log，就直接提交。
+如果碰到只有prepare，没有commit的redo log，就拿着XID去binlog找对应的事务，如果能找到完整的事务，则提交该事务，否则回滚事务。
+
+
+> 追问3：处于prepare阶段的redo log加上完整的binlog，重启就能恢复，MySQL为什么要这样设计？
+这跟主备(从)数据一致性有关。在时刻B，也就是binlog写完，redo log还没commit前发生了crash，此时binlog已经写入了，之后就会被从库
+(或者用binlog恢复出来的库)使用。也就是说，之后从库会应用这个事务对数据的修改，那么显然主库上也要提交这个事务，否则会造成主从库数据不一致。
+
+
+> 追问4：如果这样的话，为什么还要两阶段提交呢？干脆先写完redo log，再写binlog。崩溃恢复时，必须得两个日志都完整才可以。是不是一样的逻辑？
+
+这主要与事务的持久性有关。
+对于InnoDB引擎来说，如果redo log提交完成了，事务就不能回滚(如果这还允许回滚，就可能覆盖掉别的事务的更新)。而如果redo log直接提交，
+然后binlog写入的时候失败，InnoDB又回滚不了，数据和binlog日志又不一致了，这会造成主从数据不一致。
+两阶段提交就是为了给所有人一个机会，当每个人都说ok时，再一起提交。
+
+
+> 追问5: 不引入两个日志，也就没有两阶段提交的必要了。只用binlog来支持崩溃恢复，又能支持归档，不就可以了？
+
+不行，因为binlog不支持崩溃恢复。
+历史原因是，InnoDB引擎并不是MySQL的原生存储引擎。MySQL的原生引擎是MyISAM，设计之初就没有支持崩溃恢复。
+InnoDB在作为MySQL的插件加入MySQL引擎家族之前，就已经是一个提供了崩溃恢复和事务支持的引擎了。
+InnoDB在接入了MySQL后，发现既然binlog没有崩溃恢复能力，那就用InnoDB原有的redo log好了。
+另外，从实现上来说，binlog是无法支持崩溃恢复的。
+redo log 和 binlog 有一个很大的区别就是，一个是循环写，一个是追加写。也就是说 redo log 只会记录未刷盘的日志，
+已经刷入磁盘的数据都会从 redo log 这个有限大小的日志文件里删除。binlog 是追加日志，保存的是全量的日志。
+当数据库 crash 后，想要恢复未刷盘但已经写入 redo log 和 binlog 的数据到内存时，binlog 是无法恢复的。
+虽然 binlog 拥有全量的日志，但没有一个标志让 InnoDB 判断哪些数据已经刷盘，哪些数据还没有。
+举个例子，binlog 记录了两条日志：
+给 ID=2 这一行的 c 字段加1
+给 ID=2 这一行的 c 字段加1
+在记录1刷盘后，记录2未刷盘时，数据库 crash。重启后，只通过 binlog 数据库无法判断这两条记录哪条已经写入磁盘，
+哪条没有写入磁盘，不管是两条都恢复至内存，还是都不恢复，对 ID=2 这行数据来说，都不对。
+但 redo log 不一样，只要刷入磁盘的数据，都会从 redo log 中抹掉，数据库重启后，直接把 redo log 中的数据都
+恢复至内存就可以了。这就是为什么 redo log 具有 crash-safe 的能力，而 binlog 不具备。
+
+这样的话，那我优化一下binlog的内容，让它来记录数据页的更改可以吗？
+可以是可以，但是这不就是又做了一个redo log出来吗？既然有现成的redo log，何必再做重复工作？
+
+
+> 追问6: 那能不能反过来，只用redo log，不用binlog？
+
+如果只是从崩溃恢复的角度看当然是可以的，你可以把binlog关掉，这样就没有两阶段提交了，但系统仍然是crash-safe的。
+但是，如果你了解一下业界各个公司的使用场景的话，就会发现在正式的生产库上，binlog都是开着的，因为它有着redo log无法替代的功能，
+那就是归档和支撑MySQL高可用。
+首先说归档。redo log是循环写，写到末尾是要回到开头继续写的。这样历史日志没法保留，redo log也就起不到归档的作用。
+再来看MySQL的高可用。我们知道，MySQL高可用的基础，就是binlog复制，备库或者说从库就是靠复制binlog来实现与主库数据一致的，
+没了binlog，就没有了MySQL的高可用，读写分离支撑更高的并发也就无从谈起了。
+此外，很多公司的异构系统(比如一些数据分析系统)，这些系统就靠消费MySQL的binlog来更新自己的数据。如果关掉binlog，这些下游系统就没法输入了。
+所以，由于现在包括MySQL高可用在内的很多系统机制都依赖于binlog，所以redo log还无法取代它。你看，发展生态是多么的重要。
+
+
+> 追问7：redo log一般设置多大？
+
+redo log太小的话，会导致它很快被写满，然后不得不强行刷redo log，这样WAL机制的能力就发挥不出来了。
+所以，如果是现在常见的几个Tb的话，就不要太小气了，直接将redo log设置成4个文件，每个文件1Gb。
+
+
+> 追问8：正常运行中的实例，数据写入后的最终落盘，是从redo log更新过来的还是从buffer pool更新过来的？
+
+这个问题涉及到了”redo log里面到底是什么“的问题。
+实际上，redo log并没有记录数据页的完整数据，所以它并没有能力自己去更新磁盘数据页，也就不存在”数据最终落盘，是由redo log更新过去“的情况。
+
+1 如果是正常运行的实例的话，数据页被修改以后，跟磁盘的数据页不一致，成为脏页。最终数据落盘，就是把内存中的数据页写盘。这个过程，甚至与
+redo log毫无关系。
+
+2 在崩溃恢复场景中，InnoDB如果判断到一个数据页可能在崩溃恢复的时候丢失了更新，就会将它读到内存，然后让redo log更新内存内容。更新完成后，
+内存页变成脏页，就回到了第一种情况的状态。
+
+
+> 追问9： redo log buffer是什么？是先修改内存，还是先写redo log文件？
+
+在一个事务的更新过程中，日志是要写多次的。譬如下面这个事务：
+
+```sql
+begin;
+insert into t1 ...
+insert into t2 ...
+commit;
+```
+
+这个事务是要往两个表中插入记录，插入数据的过程中，生成的日志都得先保存起来，但又不能在还没commit的时候就直接写到redo log文件里。
+所以redo log buffer就是一块内存，是用来先存redo log日志的。也就是说，在执行第一个insert的时候，数据的内存被修改了，redo log buffer也写入了日志。
+但是，真正把日志写到redo log文件(文件名是ib_logfile+数字)，是在执行commit语句的时候做的。
+单独执行一个更新语句的时候，InnoDB会自己启动一个事务，在语句执行完成的时候提交。过程跟上面是一样的，只不过是压缩到了一个语句里完成而已。
+
+
+> 如何解决刷脏页导致的MySQL性能下降问题？
+
+当内存数据页跟磁盘数据页内容不一致的时候，我们称这个内存页为“脏页”。内存数据写入到磁盘后，内存和磁盘上的数据页的内容就一致了，称为“干净页”。
+
+以下四种情况会引发数据库的 flush 过程。
+当InnoDB 的 redo log 写满了，这时候系统会停止所有更新操作，把 checkpoint 往前推进，redo log 留出空间可以继续写。
+
+
+
+
+
+![redo-log-process.png](images%2Fredo-log-process.png)
+
+
+
+
+
+checkpoint 可不是随便往前修改一下位置就可以的。比如上图中，把 checkpoint 位置从 CP 推进到 CP’，就需要将两个点之间的日志
+（浅绿色部分），对应的所有脏页都 flush 到磁盘上。之后，图中从 write pos 到 CP’之间就是可以再写入的 redo log 的区域。
+
+- 第二种场景是系统内存不足。当需要新的内存页，而内存不够用的时候，就要淘汰一些数据页，空出内存给别的数据页使用。如果淘汰的是“脏页”，
+就要先将脏页写到磁盘。 你一定会说，这时候难道不能直接把内存淘汰掉，下次需要请求的时候，从磁盘读入数据页，然后拿 redo log 出来应用 
+不就行了？这里其实是从性能考虑的。如果刷脏页一定会写盘，就保证了每个数据页有两种状态：
+   - 一种是内存里存在，内存里就肯定是正确的结果，直接返回；
+   - 另一种是内存里没有数据，就可以肯定数据文件上是正确的结果，读入内存后返回。 这样的效率最高。
+
+- 第三种场景是 MySQL 认为系统“空闲”的时候。
+- 第四种场景是 MySQL 正常关闭的情况。这时候，MySQL 会把内存的脏页都 flush 到磁盘上，这样下次 MySQL 启动的时候，就可以直接从磁盘上读数据，启动速度会很快。
+
+接下来，我们看一下上面四种场景对性能的影响。
+其中，第三种情况是属于 MySQL 空闲时的操作，这时系统没什么压力，而第四种场景是数据库本来就要关闭了。这两种情况下，你不会太关注“性能”问题。所以这里，我们
+主要来分析一下前两种场景下的性能问题。
+第一种是“redo log 写满了，要 flush 脏页”，这种情况是 InnoDB 要尽量避免的。因为出现这种情况的时候，整个系统就不能再接受更新了，所有的更新都必须
+堵住。如果你从监控上看，这时候更新数会跌为 0。
+第二种是“内存不够用了，要先将脏页写到磁盘”，这种情况其实是常态。InnoDB 用缓冲池（buffer pool）管理内存，缓冲池中的内存页有三种状态：
+- 第一种是，还没有使用的；
+- 第二种是，使用了并且是干净页；
+- 第三种是，使用了并且是脏页。
+  InnoDB 的策略是尽量使用内存，因此对于一个长时间运行的库来说，未被使用的页面很少。
+  而当要读入的数据页没有在内存的时候，就必须到缓冲池中申请一个数据页。这时候只能把最久不使用的数据页从内存中淘汰掉：如果要淘汰的是一个干净页，就直接
+- 释放出来复用；但如果是脏页呢，就必须将脏页先刷到磁盘，变成干净页后才能复用。
+  所以，刷脏页虽然是常态，但是出现以下这两种情况，都是会明显影响性能的：
+1. 一个查询要淘汰的脏页个数太多，会导致查询的响应时间明显变长；
+2. redo log日志写满，更新全部堵住，写性能跌为 0，这种情况对敏感业务来说，是不能接受的。
+
+所以，InnoDB 需要有控制脏页比例的机制，来尽量避免上面的这两种情况。
+
+
+> InnoDB 刷脏页的控制策略
+
+接下来，我们来看看 InnoDB 脏页的控制策略，以及和这些策略相关的参数。
+首先，你要正确地告诉 InnoDB 所在主机的 IO 能力，这样 InnoDB 才能知道需要全力刷脏页的时候，可以刷多快。
+这就要用到 innodb_io_capacity 这个参数了，它会告诉 InnoDB 你的磁盘能力。这个值我建议你设置成磁盘的 IOPS。磁盘的 IOPS 可以通过 fio 
+这个工具来测试，下面的语句是我用来测试磁盘随机读写的命令：
+
+```shell
+fio -filename=$filename -direct=1 -iodepth 1 -thread -rw=randrw -ioengine=psync -bs=16k -size=500M -numjobs=10 -runtime=10 -group_reporting -name=mytest
+```
+
+其实，因为没能正确地设置 innodb_io_capacity 参数，而导致的性能问题也比比皆是。之前，就曾有其他公司的开发负责人找我看一个库的性能
+问题，说 MySQL 的写入速度很慢，TPS 很低，但是数据库主机的 IO 压力并不大。经过一番排查，发现罪魁祸首就是这个参数的设置出了问题。
+他的主机磁盘用的是 SSD，但是 innodb_io_capacity 的值设置的是 300。于是，InnoDB 认为这个系统的能力就这么差，所以刷脏页刷得特别慢，
+甚至比脏页生成的速度还慢，这样就造成了脏页累积，影响了查询和更新性能。
+InnoDB 的刷盘速度要参考这两个因素：一个是脏页比例，一个是 redo log 写盘速度。
+InnoDB 会根据这两个因素先单独算出两个数字。参数 innodb_max_dirty_pages_pct 是脏页比例上限，默认值是 75%。
+nnoDB 会在后台刷脏页，而刷脏页的过程是要将内存页写入磁盘。所以，无论是你的查询语句在需要内存的时候可能要求淘汰一个脏页，还是由于刷脏页的
+逻辑会占用 IO 资源并可能影响到了你的更新语句，都可能是造成你从业务端感知到 MySQL“抖”了一下的原因。
+要尽量避免这种情况，你就要合理地设置 innodb_io_capacity 的值，并且平时要多关注脏页比例，不要让它经常接近 75%。
+其中，脏页比例是通过 Innodb_buffer_pool_pages_dirty/Innodb_buffer_pool_pages_total 得到的，具体的命令参考下面的代码：
+
+
+```sql
+select VARIABLE_VALUE into @a from global_status where VARIABLE_NAME = 'Innodb_buffer_pool_pages_dirty';
+select VARIABLE_VALUE into @b from global_status where VARIABLE_NAME = 'Innodb_buffer_pool_pages_total';
+select @a/@b;
+```
+
+接下来，我们再看一个有趣的策略。
+一旦一个查询请求需要在执行过程中先 flush 掉一个脏页时，这个查询就可能要比平时慢了。而 MySQL 中的一个机制，可能让你的查询会更慢：
+在准备刷一个脏页的时候，如果这个数据页旁边的数据页刚好是脏页，就会把这个“邻居”也带着一起刷掉；而且这个把“邻居”拖下水的逻辑还可以
+继续蔓延，也就是对于每个邻居数据页，如果跟它相邻的数据页也还是脏页的话，也会被放到一起刷。
+在 InnoDB 中，innodb_flush_neighbors 参数就是用来控制这个行为的，值为 1 的时候会有上述的“连坐”机制，值为 0 时表示不找邻居，自己刷自己的。
+找“邻居”这个优化在机械硬盘时代是很有意义的，可以减少很多随机 IO。机械硬盘的随机 IOPS 一般只有几百，相同的逻辑操作减少随机
+IO 就意味着系统性能的大幅度提升。
+而如果使用的是 SSD 这类 IOPS 比较高的设备的话，我就建议你把 innodb_flush_neighbors 的值设置成 0。因为这时候 IOPS 往往不是瓶颈，
+而“只刷自己”，就能更快地执行完必要的刷脏页操作，减少 SQL 语句响应时间。
+在 MySQL 8.0 中，innodb_flush_neighbors 参数的默认值已经是 0 了。
