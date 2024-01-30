@@ -617,3 +617,292 @@ mysql默认会将字符串转化为数字，要验证这一点很简单，连接
 
 
 
+#### 2.3.3.5 少使用or或in，not in,  exist，MySQL内部优化器可能不走索引
+当in后面的子查询语句结果集数据比较多时，可能会导致索引失效。
+优化: 将in后面的子查询语句结果集进行拆分，比如有10万条数据，可以拆分为一次查询1000条，查询100次，运用多线程进行结果整合。
+主键索引使用not in 关键字查询数据范围可以命中索引，而普通索引使用not in关键字查询数据范围则会导致索引失效；使用
+not exists关键字会导致索引失效。
+or前后的字段必须都有索引才会走索引，只要其中有一个字段没索引都会导致索引失效。
+
+
+### 2.3.4 范围查询优化
+
+
+
+
+
+![explain-ten.png](images%2Fexplain-ten.png)
+
+
+
+
+
+![explain-eleven.png](images%2Fexplain-eleven.png)
+
+
+
+
+
+优化: 将一个很大的查询范围拆分为多个小范围查询结果集之和，这样虽然需要多次查询才能得到最终结果，但是不会导致索引
+失效，总体查询时间仍然比全表扫描要少很多。
+
+
+
+
+
+### 2.3.5 多表连接查询优化
+```sql
+explain select * from t1 inner join t2 on t1.a = t2.a
+```
+t1是大表(一万条记录)，t2是小表(一百条记录)，在inner join查询中，如果关联字段建立了索引，且字段类型相同，MySQL
+就会使用NLJ(Nested Loop Join)算法，去找小表(数据量比较小的表)作为驱动表，先从驱动表读取一行数据，然后拿着这
+一行数据去被驱动表(数据量比较大的表)中做查询。这样的大表和小表是由MySQL内部优化器来决定的，跟sql语句中中表的书写顺序无关。
+
+相反，如果关联字段没有建立索引，或者建立了索引但是字段的类型不同或者长度不同，那么会导致索引失效，此时MySQL会创建一个
+join buffer内存缓冲区，把小表数据存进来(为什么不存大表，因为缓冲区大小限制，以及存数据消耗性能的考虑)，将内存缓冲区的
+100行记录去和大表中的1万行记录进行比较，比较的过程依然是在内存中进行的。join buffer内存缓冲区起到了提高join查询效率的效果。
+此时使用的是Block Nested Loop Join(BNLJ)算法。
+
+还有一个很坑的地方，就是多表join连接查询时，连接字段的两个表的字符集也必须相同，否则索引也会失效，譬如A表字符集是utf8, 
+join的表B字符集是utf8mb4，那么即使连接字段名，类型都完全相同，也都建立了索引，这个索引也会失效，也会走全表扫描。
+为什么呢？
+字符集utf8mb4是utf8的超集，所以当这两个类型的字符串做比较时，MySQL内部的操作是先将utf8字符串转化成utf8mb4字符集，
+再做比较。这个转换过程，其实就是在被驱动表的索引字段上加函数操作，优化器会放弃走索引树。
+
+关联字段没建立索引前是全表扫描ALL
+
+
+
+
+
+![explain-twelve.png](images%2Fexplain-twelve.png)
+
+
+
+
+
+关联字段建立索引后则是ref
+
+
+
+
+
+![explain-thirteen.png](images%2Fexplain-thirteen.png)
+
+
+
+
+
+### 2.3.6 小表驱动大表优化
+>在使用多表连接查询时，尽量使用inner join，这样MySQL优化器会自动选择小表来驱动大表，如果使用left join 
+或者 right join 要注意表的书写顺序，如果是左连接，则必须左表为小表，如果是右连接，则必须右表为小表，否则
+会出现大表驱动小表，导致性能问题。
+
+>in 和 exists优化，也要遵循小表驱动大表的原则以提高查询性能，in查询适合左表为大表，右表为小表的场景。
+
+譬如:
+```sql
+select * from bigTable where id in (select id from smallTable)
+```
+
+相反，如果是左表为小表，右表为大表的场景，那就应该使用exists查询，譬如:
+```sql
+select * from smallTable where exists (select 1 from bigTable where bigTable.id = smallTable.id)
+```
+
+### 2.3.7 小表驱动大表优化
+```sql
+explain select * from employees limit 10000, 10
+```
+
+如果主键索引是连续的情况下可以这样优化:
+```sql
+explain select * from employees where id > 10000 limit 10;
+```
+
+如果主键索引不连续，则可以这样优化:
+```sql
+select * from employees a inner join (select id from employees limit 10000, 10) b on a.id = b.id
+```
+
+
+
+
+
+![explain-fourteen.png](images%2Fexplain-fourteen.png)
+
+
+
+
+
+### 2.3.8 Count 优化
+对于count的优化应该是架构层面的优化，因为count的统计在一个产品中会经常出现，而且每个用户都会访问，所以对于访问
+频率过高的数据建议维护在缓存中。
+
+### 2.3.9 order by 优化
+如果explain中的Extra信息出现了Using filesort意味着sql语句执行时进行了文件排序，原因当然是没有命中索引，优化方案
+是让排序字段遵循最左匹配原则，避免文件排序。
+order by多个列排序在遵循联合索引的最左匹配原则时，是可以走索引的；或者where条件列与order by列合在一起遵循
+最左匹配原则，也是可以命中索引的；如果中间有断层，比如跳过了第二个字段，也是可以命中索引的，只是排序时效率比较低，需要
+走一次filesort文件排序。
+
+
+
+
+
+![explain-fifteen.png](images%2Fexplain-fifteen.png)
+
+
+
+
+
+那么，什么时候索引会失效呢？
+> 虽然order by 或者where + order by列顺序遵循最左匹配原则，但是使用了select * 导致需要回表会使联合索引失效。
+
+
+
+
+
+![explain-sixteen.png](images%2Fexplain-sixteen.png)
+
+
+
+
+
+> 对不同的索引列做order by会导致索引失效
+
+譬如下面这个案例c_age对应了(c_age,c_name,c_address)三个列的联合索引，c_class_id对应了c_class_id列的
+索引，对这两个索引列做order by排序就会导致索引失效，因为这种情况MySQL无法做到这两列数据的全局有序。
+
+
+
+
+
+![explain-seventeen.png](images%2Fexplain-seventeen.png)
+
+
+
+
+
+> 不遵循最左匹配原则，8.0及以上版本做了优化，可以走索引，但是排序时效率比较低，需要走一次filesort文件排序。
+
+
+
+
+
+![explain-eighteen.png](images%2Fexplain-eighteen.png)
+
+
+
+
+
+>  order by多个排序字段排序顺序不同会导致索引失效，但是8.0及以上版本做了优化，可以走索引，但是排序时效率
+比较低，需要走一次filesort文件排序。
+
+
+
+
+
+![explain-nineteen.png](images%2Fexplain-nineteen.png)
+
+
+
+
+
+> filesort文件排序的原理
+在执行文件排序的时候，会把查询的数据量大小与系统变量: max_length_for_sort_data的大小进行比较
+(默认是1024个字节), 如果比系统变量小，那么执行单路排序，否则执行双路排序。
+
+单路排序
+把所有的数据扔到sort_buffer内存缓冲区中，进行排序；
+双路排序
+取数据的排序字段和主键字段，扔到内存缓冲区，排序完成后，根据主键字段做一次回表查询，获取完整数据。
+
+### 2.3.10 MySQL优化器有可能走错了索引，需要手动纠正，可以通过force index 指定索引。
+
+```sql
+explain select * from user force index(idx_age) where age=60;
+```
+
+### 2.3.11 连接数过小
+MySQL的server层里有一个连接管理，它的作用是管理客户端和MySQL之间的长连接。如果客户端与server层只有一条连接，
+那么在执行SQL查询后，只能阻塞等待结果返回，如果有大量查询同时并发请求，那么后面的请求都需要等到前面的请求执行完成，才能开始执行。
+连接数过小的问题，受数据库和客户端两侧同时限制。
+
+数据库连接数过小
+MySQL最大连接数默认是100，最大可以达到16384。
+可以通过设置MySQL的max_connections参数，更改数据库的最大连接数。
+
+```sql
+set global max_connections = 500;
+show variables like 'max_connections';
+```
+
+> 应用层连接数过小
+MySQL客户端，也就是应用层与MySQL底层的连接，是基于TCP协议的长连接，而TCP协议，需要经过三次握手和四次挥手来实现连接
+建立和关闭。如果每次执行SQL都重新建立一个新的连接的话，那就要不断的握手和挥手，非常耗时。所以一般会建立一个长连接池，
+连接用完后，再塞回到连接池里，下次要执行SQL时，再从里面捞一条连接出来，实现连接复用，避免频繁通过握手和挥手建立和关闭连接。
+
+一般的ORM库都会实现连接池，譬如gorm是这么设置连接池的。
+
+```go
+func Init() {
+    db, err := gorm.Open(mysql.Open(conn), config)
+    sqlDB, err := db.DB()
+    // 设置空闲连接池中连接的最大数量
+    sqlDB.SetMaxIdleConns(200)
+    // 设置打开数据库的最大连接数量
+    sqlDB.SetMaxOpenConns(1000)
+}
+```
+
+
+### 2.3.12  buffer pool太小
+在数据库查询流程里，在InnoDB存储引擎取数据时，为了加速，会有一层内存buffer pool， 用于将磁盘数据页加载到内存页
+中，只要查询到buffer pool 里有，就可以直接返回，速度就很快了，否则就得走磁盘IO，那就慢了。
+也就是说，如果我的buffer pool越大，那我们在bp中能存放的数据页就越多，相应的，SQL查询时就更可能命中buffer pool, 
+查询速度自然就更快了。
+
+可以通过下面的命令查询bp的大小，单位是Byte。
+```sql
+show global variables like 'inndodb_buffer_pool_size';
+```
+可以通过下面的指令调大一些:
+```sql
+set global innodb_buffer_pool_size = 536870912;
+```
+这样就把bp调大到512Mb了。
+
+问题又来了，怎么知道buffer pool 是不是太小了？
+这个我们可以看看buffer pool 的缓存命中率
+
+```sql
+// 查看bp相关信息
+show status like "Innodb_buffer_pool_%";
+其中Innodb_buffer_pool_read_requests 表示读请求的次数
+Innodb_buffer_pool_reads 表示从物理磁盘中读取数据的请求次数。
+所以bp的命中率可以通过以下公式得到
+rate = 1 - (Innodb_buffer_pool_reads/Innodb_buffer_pool_read_requests) * 100%
+```
+
+一般情况下，bp的命中率都在99%以上，如果低于这个值，就需要考虑加大bp的值了。比较好的做法是将这个bp命中率指标加到监控里，
+这样晚上SQL查询慢发了邮件告警，第二天早上上班查看邮件就能定位到原因，很nice。
+
+
+### 2.3.13 group by 优化
+> 如果对group by语句的结果没有排序要求，需要在语句后加上order by null;
+> 尽量让group by 过程用上表的索引(对分组字段建立索引)，确认方法是explain结果里没有出现Using temporary和Using filesort。
+> 如果group by 需要统计的数据量不大，尽量使用内存临时表sort buffer；也可以通过适当调大tmp_table_size参数，来避免用到磁盘临时表。
+> 如果数据量是在太大，使用SQL_BIG_RESULT这个提示，来告诉优化器直接使用排序算法得到group by的结果。
+
+
+
+
+
+![explain-twenty.png](images%2Fexplain-twenty.png)
+
+
+
+
+
+![explain-twentyone.png](images%2Fexplain-twentyone.png)
