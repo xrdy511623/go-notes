@@ -93,7 +93,7 @@ MariaDB 的这个策略，目标是“模拟主库的并行模式”。
 
 
 
-![two-phrase-commit.png](images%2Ftwo-phrase-commit.png)
+![two-phase-commit.png](images%2Ftwo-phase-commit.png)
 
 
 
