@@ -3,24 +3,42 @@
 pprof性能调优详解
 ---
 
-1 性能调优原则
-要依靠数据而不是猜测
-要定位最大瓶颈而不是细枝末节
-不要过早优化
-不要过度优化
+# 1 性能调优原则
+要依靠数据而不是猜测;
+要定位最大瓶颈而不是细枝末节;
+不要过早优化!
+不要过度优化!
 
-2 性能分析工具-pprof
+# 2 性能分析工具-pprof
 说明
 希望知道应用在什么地方耗费了多少CPU、Memory
 pprof是用于可视化和分析性能数据的工具
 
-2.1> pprof-功能简介
+## 2.1 pprof-功能简介
+
+
+
+
+
 ![pprof-brief.png](images%2Fpprof-brief.png)
 
-2.2> pprof-性能排查实战
 
-浏览器查看指标
+
+
+
+## 2.2 pprof-性能排查实战
+
+> 浏览器查看指标
+
+
+
+
+
 ![overview-initial.png](images%2Foverview-initial.png)
+
+
+
+
 
 > CPU
 ```shell
@@ -29,7 +47,15 @@ go tool pprof "http://localhost:6060/debug/profile?seconds=10"
 
 profile表示采样的是CPU指标，seconds=10代表采样时长为10s。
 
+
+
+
+
 ![cpu-shell.png](images%2Fcpu-shell.png)
+
+
+
+
 
 使用top工具查看暂用CPU资源最多的函数，定位到*Tiger的Eat函数
 
@@ -44,8 +70,18 @@ cum% cum占CPU总时间的比例
 显然，当前函数没有调用其他函数时，flat=cum;
 当前函数只有其他函数的调用时，flat=0
 
-接下来，使用list工具根据指定的正则表达式查找代码行
+接下来，使用list工具根据指定的正则表达式查找代码行。
+
+
+
+
+
 ![list-search-problem.png](images%2Flist-search-problem.png)
+
+
+
+
+
 
 ```golang
 loop := 10000000000
@@ -56,7 +92,14 @@ for i := 0; i < loop; i++ {
 可以看到这个函数里，进行了100亿次的空循环，占用了大量的CPU时间，当我们把这部分代码注释后，
 CPU的性能问题也就解决了。
 
+
+
+
+
 ![cpu-solve.png](images%2Fcpu-solve.png)
+
+
+
 
 
 > heap 堆内存
@@ -74,16 +117,46 @@ brew install graphviz
 go tool pprof -http=:8089 "http://localhost:6060/debug/heap"
 ```
 
+
+
+
+
 ![before-heap.png](images%2Fbefore-heap.png)
+
+
+
+
 
 通过top模式定位到造成堆内存暴涨的问题代码(Mouse.Steal()以及Mouse.Pee())
 我们将问题代码注释后，堆内存的问题得以解决。
 
+
+
+
+
 ![solve-heap-one.png](images%2Fsolve-heap-one.png)
+
+
+
+
+
 ![solve-heap-two.png](images%2Fsolve-heap-two.png)
 
+
+
+
+
 内存相关指标说明
+
+
+
+
+
 ![mem-stats.png](images%2Fmem-stats.png)
+
+
+
+
 
 alloc_objects 程序累计申请的对象数；
 alloc_space   程序累计申请的内存大小；
@@ -112,19 +185,48 @@ top 10
 go tool pprof -http=:8089 "http://localhost:6060/debug/goroutine"
 ```
 
+
+
+
+
 ![before-goroutine.png](images%2Fbefore-goroutine.png)
 
+
+
+
+
 可以看到协程数多的代码是Wolf.Drink()，我们将其注释后协程暴涨的问题得以解决。
+
+
+
+
+
 ![solve-goroutine.png](images%2Fsolve-goroutine.png)
 
+
+
+
+
 ![goroutine-flame.png](images%2Fgoroutine-flame.png)
+
+
+
+
 
 选择上面的火焰图(flame)模式，可以更直观的定位到问题函数。
 从上到下表示调用顺序；
 每一块代表一个函数，越长代表占用CPU的时间更长；
 火焰图是动态的，支持点击块进行分析。
 
+
+
+
+
 ![after-goroutine.png](images%2Fafter-goroutine.png)
+
+
+
+
 
 此时，goroutine(协程)的数量由最开始的52个下降到5个。
 
@@ -135,12 +237,34 @@ go tool pprof -http=:8089 "http://localhost:6060/debug/goroutine"
 go tool pprof -http=:8089 "http://localhost:6060/debug/mutex"
 ```
 
+
+
+
+
 ![before-lock.png](images%2Fbefore-lock.png)
+
+
+
+
 
 通过top模式我们很容易定位到问题代码是Wolf.Howl()函数，将其注释后互斥锁的问题得以解决。
 
+
+
+
+
 ![solve-lock.png](images%2Fsolve-lock.png)
+
+
+
+
+
 ![after-lock.png](images%2Fafter-lock.png)
+
+
+
+
+
 
 > block
 
@@ -151,25 +275,69 @@ go tool pprof -http=:8089 "http://localhost:6060/debug/block"
 
 同样的，我们通过top模式可以地轻松定位到问题代码是Cat.Pee()函数
 
+
+
+
+
 ![solve-block.png](images%2Fsolve-block.png)
 
+
+
+
+
 在我们将问题代码注释后，阻塞的问题得以解决。
+
+
+
+
+
 ![after-block.png](images%2Fafter-block.png)
+
+
+
+
 
 等等，我们在总览里看到程序的block阻塞有两处，为什么这里只显示了一处？
 
+
+
+
+
 ![block-explain.png](images%2Fblock-explain.png)
+
+
+
+
 
 原因是另一处阻塞的时间太短(<=0.6s)秒的不予展示。
 那另一处阻塞到底是什么情况呢？
+
+
+
+
+
 ![another-block.png](images%2Fanother-block.png)
+
+
+
+
+
 可以看到是正常的sync.Wait操作。
 
 所有问题解决后，我们再来看程序的主要性能指标数据:
 
+
+
+
+
+
 ![after-overview.png](images%2Fafter-overview.png)
 
-3 性能分析工具-pprof采样过程和原理
+
+
+
+
+# 3 性能分析工具-pprof采样过程和原理
 
 > CPU
 
@@ -180,7 +348,15 @@ go tool pprof -http=:8089 "http://localhost:6060/debug/block"
 开始采样 ----> 设定信号处理函数 ----> 开启定时器
 停止采样 ----> 取消信号处理函数 ----> 关闭定时器
 
+
+
+
+
 ![cpu-record.png](images%2Fcpu-record.png)
+
+
+
+
 
 操作系统每10ms向进程发送一次SIGPROF信号;
 进程每次接收到SIGPROF信号会记录调用堆栈；

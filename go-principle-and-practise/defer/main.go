@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 )
 
 func df1() int {
@@ -136,6 +135,4 @@ func main() {
 		"BB", 10, 12, 22
 		"AA", 1, 3, 4
 	*/
-	fmt.Println("当前时间是:")
-	fmt.Println(time.Now().Unix())
 }

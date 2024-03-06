@@ -3,9 +3,9 @@
 map详解
 ---
 
-1  map的底层实现原理是什么？
+# 1 map的底层实现原理是什么？
 
-Go 语言的map采用的是哈希查找表，并且使用链表解决哈希冲突。
+**Go 语言的map采用的是哈希查找表，并且使用链表解决哈希冲突**
 
 ```golang
 type hmap struct {
@@ -46,7 +46,15 @@ type bmap struct {
 `bmap` 就是我们常说的“桶”，桶里面会最多装 8 个 key，这些 key 之所以会落入同一个桶，是因为它们经过哈希计算后，哈希结果
 是“一类”的。在桶内，又会根据 key 计算出来的 hash 值的高 8 位来决定 key 到底落入桶内的哪个位置（一个桶内最多有8个位置）。
 
-![hmap-and-bmap.png](hmap-and-bmap.png)
+
+
+
+
+![hmap-and-bmap.png](images%2Fhmap-and-bmap.png)
+
+
+
+
 
 当 map 的 key 和 value 都不是指针，并且 size 都小于 128 字节的情况下，会把 bmap 标记为不含指针，这样可以避免 gc 时扫描整个 
 hmap。但是，我们看 bmap 其实有一个 overflow 的字段，是指针类型的，破坏了 bmap 不含指针的设想，这时会把 overflow 移动到
@@ -65,7 +73,15 @@ type mapextra struct {
 
 bmap 是存放 k-v键值对的地方，我们把视角拉近，仔细看 bmap 的内部组成。
 
-![bmap-detail.png](bmap-detail.png)
+
+
+
+
+![bmap-detail.png](images%2Fbmap-detail.png)
+
+
+
+
 
 上图就是 bucket 的内存模型，`HOB Hash` 指的就是 top hash。 注意到 key 和 value 是各自放在一起的，并不是
 `key/value/key/value/...` 这样的形式。源码里说明这样的好处是在某些情况下可以省略掉 padding 字段，节省内存空间。
@@ -76,7 +92,15 @@ bmap 是存放 k-v键值对的地方，我们把视角拉近，仔细看 bmap �
 每个 bucket 设计成最多只能放 8 个 key-value 对，如果有第 9 个 key-value 落入当前的 bucket，那就需要再构建一个 
 bucket ，通过 `overflow` 指针连接起来。
 
-![make-map.png](make-map.png)
+
+
+
+
+![make-map.png](images%2Fmake-map.png)
+
+
+
+
 
 通过汇编语言可以看到，实际上底层调用的是 `makemap` 函数，主要做的工作就是初始化 `hmap` 结构体的各种字段，例如计算
 B 的大小，设置哈希种子 hash0 等等。
@@ -116,9 +140,9 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 
 ```
 
-slice 和 map 分别作为函数参数时有什么区别？
-注意，这个函数返回的结果：`*hmap`，它是一个指针，而`makeslice` 函数返回的是 `Slice` 结构体：
+# 2 slice 和 map 分别作为函数参数时有什么区别？
 
+注意，这个函数返回的结果：`*hmap`，它是一个指针，而`makeslice` 函数返回的是 `Slice` 结构体：
 makemap 和 makeslice 的区别，带来一个不同点：当 map 和 slice 作为函数参数时，在函数参数内部对 map 的操作会
 影响 map 自身；而对 slice 却不会。
 主要原因：一个是指针（`*hmap`），一个是结构体（`slice`）。Go 语言中的函数传参都是值传递，在函数内部，参数会被
@@ -143,7 +167,15 @@ key 经过哈希计算后得到哈希值，共 64 个 bit 位（64位机，32位
 buckets 编号就是桶编号，当两个不同的 key 落在同一个桶中，也就是发生了哈希冲突。冲突的解决手段是用链表法：在 
 bucket 中，从前往后找到第一个空位。这样，在查找某个 key 时，先找到对应的桶，再去遍历 bucket 中的 key。
 
-![hash-key-search.png](hash-key-search.png)
+
+
+
+
+![hash-key-search.png](images%2Fhash-key-search.png)
+
+
+
+
 
 上图中，假定 B = 5，所以 bucket 总数就是 2^5 = 32。首先计算出待查找 key 的哈希，使用低 5 位 `00110`，找到对应的 6 号 bucket，
 使用高 8 位 `10010111`，对应十进制 151，在 6 号 bucket 中寻找 tophash 值（HOB hash）为 151 的 key，找到了 2 号槽位，
@@ -176,7 +208,7 @@ dataOffset = unsafe.Offsetof(struct {
 的大小；而我们又知道，value 的地址是在所有 key 之后，因此第 i 个 value 的地址还需要加上所有 key 的偏移。理解了这些，
 上面 key 和 value 的定位公式就很好理解了。
 
-3  map的赋值过程
+# 3 map的赋值过程
 
 通过汇编语言可以看到，向 map 中插入或者修改 key，最终调用的是 `mapassign` 函数。
 实际上插入或修改 key 的语法是一样的，只不过前者操作的 key 在 map 中不存在，而后者操作的 key 存在 map 中。
@@ -223,7 +255,7 @@ func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer
 
 答案还得从汇编语言中寻找。`mapassign` 函数返回的指针就是指向的 key 所对应的 value 值位置，有了地址，就很好操作赋值了。
 
-4  map的删除过程
+# 4 map的删除过程
 
 删除操作底层的执行函数是 `mapdelete`
 
@@ -253,7 +285,7 @@ if t.indirectvalue {
 ```
 最后，将 count 值减 1，将对应位置的 tophash 值置成 `Empty`。
 
-5 map的扩容过程
+# 5 map的扩容过程
 
 使用哈希表的目的就是要快速查找到目标 key，然而，随着向 map 中添加的 key 越来越多，key 发生碰撞的概率也越来越大。bucket 中的 8 个
 cell 会被逐渐塞满，查找、插入、删除 key 的效率也会越来越低。最理想的情况是一个 bucket 只装一个 key，这样，就能达到 `O(1)` 的效率，
@@ -335,7 +367,15 @@ func tooManyOverflowBuckets(noverflow uint16, B uint8) bool {
 对于条件 1，就没这么简单了。要重新计算 key 的哈希，才能决定它到底落在哪个 bucket。例如，原来 B = 5，计算出 key 的哈希后，只用看它的低 5 位，
 就能决定它落在哪个 bucket。扩容后，B 变成了 6，因此需要多看一位，它的低 6 位决定 key 落在哪个 bucket。这称为 `rehash`。
 
-![rehash.png](rehash.png)
+
+
+
+
+![rehash.png](images%2Frehash.png)
+
+
+
+
 
 因此，某个 key 在搬迁前后 bucket 序号可能和原来相等，也可能是相比原来加上 2^B（原来的 B 值），取决于 hash 值 第 6 bit 位是 0  还是 1。
 再明确一个问题：如果扩容后，B 增加了 1，意味着 buckets 总数是原来的 2 倍，原来 1 号的桶“裂变”到两个桶。
@@ -352,19 +392,45 @@ map 的源码里到处都是，要理解透了。
 太多，触发了等量扩容（对应于前面的条件 2）。
 
 下面是扩容前:
-![expand-before.png](expand-before.png)
+
+
+
+
+
+![expand-before.png](images%2Fexpand-before.png)
+
+
+
+
 
 扩容后:
-![expand-after.png](expand-after.png)
+
+
+
+
+
+![expand-after.png](images%2Fexpand-after.png)
+
+
+
+
 
 扩容完成后，overflow bucket 消失了，key 都集中到了一个 bucket，更为紧凑了，提高了查找的效率。
 
-![double-expand.png](double-expand.png)
+
+
+
+
+![double-expand.png](images%2Fdouble-expand.png)
+
+
+
+
 
 假设触发了 2 倍的扩容，那么扩容完成后，老 buckets 中的 key 分裂到了 2 个 新的 bucket。一个在 x part，一个在 y 的 part。依据是 hash 的 
 lowbits。新 map 中 `0-3` 称为 x part，`4-7` 称为 y part。
 
-6  map中的key 为什么是无序的
+# 6 map中的key 为什么是无序的
 
 map 在扩容后，会发生 key 的搬迁，原来落在同一个 bucket 中的 key，搬迁后，有些 key 就要远走高飞了（bucket 序号加上了 2^B）。
 而遍历的过程，就是按顺序遍历 bucket，同时按顺序遍历 bucket 中的 key。搬迁后，key 的位置发生了重大的变化，有些 key 飞上高枝，
@@ -375,7 +441,7 @@ map 在扩容后，会发生 key 的搬迁，原来落在同一个 bucket 中的
 是从这个 bucket 的一个随机序号的 cell 开始遍历。这样，即使你是一个写死的 map，仅仅只是遍历它，也不太可能会返回一个固定序列的 key/value 对了。
 
 
-7  map的key 可以是 float 型吗？
+# 7 map的key 可以是 float 型吗？
 从语法上看，是可以的。Go 语言中只要是可比较的类型都可以作为 key。除开 slice，map，functions 这几种类型，其他类型都是 OK 的。具体包括：
 布尔值、数字、字符串、指针、通道、接口类型、结构体、只包含上述类型的数组。这些类型的共同特征是支持 == 和 != 操作符，k1 == k2 时，
 可认为 k1 和 k2 是同一个 key。如果是结构体，则需要它们的字段值都相等，才被认为是相同的 key。
@@ -500,13 +566,13 @@ PASS
 Process finished with exit code 0
 ```
 
-8  可以边遍历边删除吗
+# 8 可以边遍历边删除吗
 map 并不是一个线程安全的数据结构。同时读写一个 map 是未定义的行为，如果被检测到，会直接 panic。
 一般而言，这可以通过读写锁来解决：sync.RWMutex。
 读之前调用 RLock() 函数，读完之后调用 RUnlock() 函数解锁；写之前调用 Lock() 函数，写完之后，调用 Unlock() 解锁。
 另外，sync.Map 是线程安全的 map，也可以使用。
 
-9  可以对 map 的元素取地址吗
+# 9 可以对 map 的元素取地址吗
 
 无法对 map 的 key 或 value 进行取址。以下代码不能通过编译：
 
@@ -530,7 +596,7 @@ func main() {
 如果通过其他 hack 的方式，例如 unsafe.Pointer 等获取到了 key 或 value 的地址，也不能长期持有，因为一旦发生扩容，
 key 和 value 的位置就会改变，之前保存的地址也就失效了。
 
-10  如何判断两个map是否相等？
+# 10 如何判断两个map是否相等？
 
 map 深度相等的条件：
 

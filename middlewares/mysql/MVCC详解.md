@@ -3,7 +3,7 @@
 MVCC(多版本并发控制)详解
 ---
 
-> 版本链
+# 1 版本链
 
 对于使用InnoDB存储引擎的表来说，它的聚簇索引记录中都包含两个必要的隐藏列（row_id并不是必要的，我们创建的表中有主键或者
 非NULL的UNIQUE键时都不会包含row_id列）：
@@ -65,7 +65,7 @@ roll_pointer属性连接成一个链表，我们把这个链表称之为版本�
 还包含生成该版本时对应的事务id，这个信息很重要，我们稍后就会用到。
 
 
-> ReadView(读视图)
+# 2 ReadView(读视图)
 
 对于使用READ UNCOMMITTED隔离级别的事务来说，由于可以读到未提交事务修改过的记录，所以直接读取记录的最新版本就好了；
 对于使用SERIALIZABLE隔离级别的事务来说，设计InnoDB的人规定使用加锁的方式来访问记录；对于使用READ COMMITTED和
@@ -324,7 +324,7 @@ SELECT * FROM hero WHERE number = 1; # 得到的列name的值仍为'刘备'
 然后再到刚才使用REPEATABLE READ隔离级别的事务中继续查找这个number为1的记录，得到的结果还是'刘备'， 具体执行过程大家可以自己分析一下。
 
 
-> 小结
+**小结**
 
 从上边的描述中我们可以看出来，所谓的MVCC（Multi-Version Concurrency Control ，多版本并发控制）指的就是在使用
 READ COMMITTD、REPEATABLE READ这两种隔离级别的事务在执行普通的SELECT操作时访问记录的版本链的过程，这样可以

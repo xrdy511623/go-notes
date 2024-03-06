@@ -33,7 +33,7 @@ git config --global merge.tool vimdiff
 ```
 
 
-1.4  > **检查配置**
+1.4 > **检查配置**
 如果想检查你的设置，可以使用 git config --list 命令来列出Git可以在该处找到的所有的设置:
 ```shell
 git config --list
