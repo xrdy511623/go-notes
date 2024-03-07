@@ -3,15 +3,15 @@
 git基础命令详解
 ---
 
-1 **git 基础配置和获取命令帮助**
+# 1 git 基础配置和获取命令帮助
 
-1.1  **git配置文件的存储位置**
+## 1.1 git配置文件的存储位置
 /etc/gitconfig文件: 对系统所有用户生效，如果你传递参数--system给git config，它将明确的读和写这个文件
 ~/.gitconfig文件，仅对当前用户生效，如果你传递参数--global给git config，它将读写此文件。
 位于代码仓库git目录下的config文件，也就是.git/config，无论当前用户是谁，都采用此配置文件的设置。每个级别重写前一个级别的值。
 因此，在.git/config中的值覆盖了在/etc/gitconfig中的同一个值。
 
-1.2 **配置用户名和密码**
+## 1.2 配置用户名和密码
 当安装Git后首先要做的事情是设置用户名和邮箱l地址。这是非常重要的，因为每次Git提交都会使用该信息。它被永远的嵌入到了你的提交中：
 
 ```shell
@@ -26,20 +26,20 @@ git config --local user.email "ybzdqhl@gmail.com"
 ```
 
 
-1.3 > **配置比较工具**
-另外一个你可能需要配置的有用的选项是缺省的比较工具它用来解决合并时的冲突。例如，想使用 vimdiff 作为比较工具。
+## 1.3 配置比较工具
+另外一个你可能需要配置的有用的选项是缺省的比较工具，它用来解决合并时的冲突。例如，想使用 vimdiff 作为比较工具。
 ```shell
 git config --global merge.tool vimdiff
 ```
 
 
-1.4 > **检查配置**
+## 1.4 检查配置
 如果想检查你的设置，可以使用 git config --list 命令来列出Git可以在该处找到的所有的设置:
 ```shell
 git config --list
 ```
 
-1.5 > **添加删除配置项**
+## 1.5 添加删除配置项
 
 添加配置项，使用:
 如果不指定，默认是添加到local配置中。
@@ -53,16 +53,16 @@ git config [--local|--global|--system] --unset key
 ```
 
 
-1.6 > **获取帮助**
+## 1.6 获取帮助
 ```shell
 git help config
 git config --help
 man git-config
 ```
 
-2 > **基础命令说明**
+# 2 基础命令说明
 
-2.1  **git init, git add,  git commit, git status**
+## 2.1  git init, git add,  git commit, git status
 
 ```shell
 # git init 命令初始化一个git仓库, 此时的默认分支是master分支
@@ -124,10 +124,10 @@ git stash drop
 
 
 
-2.2 **git reset**
+## 2.2 git reset
 
 ```shell
-1 如果想要撤销commit提交，回退到指定某一次提交的版本，可以使用reset命令。
+# 如果想要撤销commit提交，回退到指定某一次提交的版本，可以使用reset命令。
 git reset [--soft|--mixed|--hard] HEAD^/commit_id
 git reset --hard HEAD^^
 # 撤销最近的四次提交
@@ -183,7 +183,7 @@ git restore filename
 
 
 
-2.3 **git stash**
+## 2.3 git stash
 
 ```shell
 # git stash的作用是将目前已经修改但是不想commit提交的内容暂存到堆栈中，后续可以在某个分支上将暂存的修改内容恢复出来。
@@ -225,7 +225,7 @@ git stash apply "stash@{n}"
 ```
 
 
-2.4  **git tag, git blame和git diff**
+## 2.4 git tag, git blame和git diff**
 ```shell
 # 新建标签，标签有两种: 轻量级标签(lightweight)与带有附注标签(annotated)
 # 创建一个轻量级标签
@@ -254,7 +254,7 @@ git diff -cached
 ```
 
 
-2.5 **gitignore**
+## 2.5 gitignore
 
 ```.gitignore
 # Binaries for programs and plugins
@@ -275,7 +275,7 @@ git diff -cached
 ```
 
 
-2.6 > **跟踪文件, 比较和git tag**
+## 2.6 跟踪文件, 比较和git tag**
 
 ```shell
 # 我只想改变一个文件名字的大小写，而不修改内容

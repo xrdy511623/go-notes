@@ -3,23 +3,23 @@
 git branch 详解
 ---
 
-1 >**branch分支简介**
-branch(分支)是git中最核心的概念，代码都是在某一个特定的分支上开发的。基于不同的需求，一般我们会创建不同的分支。常见的git flow工作流是下面这样的:
+# 1 branch分支简介
+branch(分支)是git中最核心的概念，代码都是在某一个特定的分支上开发的。基于不同的需求，一般我们会创建不同的分支。
+常见的git flow工作流是下面这样的:
 dev 分支 频繁变化的一个分支
 test 分支 供测试与产品等人员使用的一个分支，变化不是特别频繁
 master分支，生产环境发布分支，变化非常不频繁的一个分支
 feature分支，开发人员开发具体功能的分支，一般基于dev分支创建而来
 bugfix分支，生产系统中出现了紧急bug, 用于紧急修复的分支。
 
-当我们基于某个分支(譬如master)创建一个新分支时(譬如dev)，此时这两个分支其实内容都是一模一样的，然后随着我们对两个分支代码的修改，它们会开始分叉，
-指针会指向各自最新的提交点。
-类似下面这样：
+当我们基于某个分支(譬如master)创建一个新分支时(譬如dev)，此时这两个分支其实内容都是一模一样的，然后随着我们对两个分支
+代码的修改，它们会开始分叉， 指针会指向各自最新的提交点，类似下面这样：
 
 ![git-branch.png](images%2Fgit-branch.png)
 
 新提交的parent指针会指向上一次提交，类似一个链表，通过parent指针将分支上的所有提交记录连接起来，方便进行版本回退。
 
-2 >**基本操作命令**
+# 2 基本操作命令
 
 ```shell
 # 查看有哪些分支
@@ -53,9 +53,9 @@ git show commit_id
 # 我想从别人正在工作的远程分支拉出(checkout)一个分支
 # 首先, 从远程拉取(fetch) 所有分支:
 # git fetch --all
-假设你想要从远程的bug_fix分支拉出到本地的bug_fix
+# 假设你想要从远程的bug_fix分支拉出到本地的bug_fix
 # git checkout --track origin/bug_fix
-(--track 是 git checkout -b [branch] [remotename]/[branch] 的简写)
+# (--track 是 git checkout -b [branch] [remotename]/[branch] 的简写)
 # 这样就得到了一个daves分支的本地拷贝, 任何推过(pushed)的更新，远程都能看到.
 
 # 基于远程仓库创建新分支并且切换到新分支
@@ -85,7 +85,7 @@ git commit -m "feature:开发完成#代号 XXX.XXX需求"
 git commit -m "fix:修改 #代号 XXXX查询问题" 
 ```
 
-3 >**在github上创建代码仓库**
+# 3 在github上创建代码仓库
 
 ![new-repository.png](images%2Fnew-repository.png)
 
@@ -99,7 +99,7 @@ ssh-keygen
 ```
 ![config-ssh.png](images%2Fconfig-ssh.png)
 
-从中可以看到生成的公私钥文件存放的位置, 将公钥的内容拷贝，而后在github的代码仓库中进行公钥配置。
+从中可以看到生成的公私钥文件存放的位置，将公钥的内容拷贝，而后在github的代码仓库中进行公钥配置。
 
 ```shell
 cd /Users/qiujun/.ssh/
@@ -108,7 +108,7 @@ cat id_rsa.pub
 
 ![config-public-key.png](images%2Fconfig-public-key.png)
 
-4 >**git pull和git push命令详解**
+# 4 git pull和git push命令详解
 远程仓库是为了解决多人分布式协作开发项目而产生的，当某个程序员在dev分支开发了一段代码后，其他的开发
 人员想要看到这段代码，怎么办？只需要这个程序员将修改通过git push指令推送到远程dev分支，其他人通过
 git pull 命令拉取远程dev分支的最新变更到本地dev分支即可。
@@ -118,12 +118,12 @@ git pull 命令拉取远程dev分支的最新变更到本地dev分支即可。
 前者是将远程仓库的origin的master分支与本地仓库的master分支相关联。
 后者是将本地的master分支推送到远程。
 
-4.1 > **代码冲突和解决**
+## 4.1 代码冲突和解决
 当两个及以上的coder都对同一个文件的同一行代码进行了修改了，便会产生代码冲突，此时需要我们手动的
 去解决冲突。一般而言，都是后推送的人会遇到冲突，解决冲突需要你跟冲突方进行协商，到底采用谁的修改。
 
 t1: 开发人员a在dev分支上对test.txt文件进行了修改，增加了第三行"How old are you?", 并进行了
-commit提交，但是还没有推送到远程。
+commit提交，但是还未推送到远程。
 
 ![git-conflict-scene-one.png](images%2Fgit-conflict-scene-one.png)
 
@@ -163,7 +163,7 @@ t6:此时开发人员a去拉取远程dev分支的代码，第三行便变成了�
 
 ![git-status.png](images%2Fgit-status.png)
 
-5 >**本地分支和远程分支**
+# 5 本地分支和远程分支
 当你新建一个本地分支(譬如test)并进行代码修改后，想要推送到远程时，git会提示你对应远程分支不存在，此时你需要执行
 git push --set-upstream origin test命令，新建远程origin test分支并追踪本地test分支。
 
@@ -184,7 +184,7 @@ git push --set-upstream origin local:remote
 # Branch local set up to track remote branch remote from origin
 ```
 
->如何删除远程分支？
+## 5.1 如何删除远程分支？
 
 有两种方法可以删除远程分支，一是: 推送一个空分支到对应的远程分支，即可将该远程分支删除
 ```shell
@@ -222,7 +222,7 @@ git log remotes/origin/master
 
 ![git-tag-operation.png](images%2Fgit-tag-operation.png)
 
-6 > **git rebase**
+# 6 git rebase
 变基，意思是改变分支的根基。
 从某种程度上来说，rebase与merge可以完成类似的工作，不过二者的工作方式有着显著的差异。
 merge合并两个分支是分叉的，而rebase是一条平直的线。 
@@ -239,7 +239,7 @@ git rebase --continue
 git rebase --abort
 ```
 
-rebase最佳实践
+**rebase最佳实践**
 不要对master分支执行rebase, 否则会引起很多问题。
 一般来说，执行rebase的分支都是自己的本地分支，没有推送到远程版本库。
 
@@ -253,19 +253,18 @@ git reset --hard ORIG_HEAD
 git mergetool -t opendiff
 ```
 
-7 >**git cherry-pick**
+# 7 git cherry-pick
 对于多分支的代码库，将代码从一个分支转移到另一个分支是常见需求。
 这时分两种情况。一种情况是，你需要另一个分支的所有代码变动，那么就采用合并（ git merge）。
 另一种情况是，你只需要部分代码变动（某几个提交），这时可以采用 cherry-pick。
 
-7.1> **基本用法**
+## 7.1 基本用法
 git cherry-pick命令的作用，就是将指定的提交（commit）应用于其他分支。
 
 ```shell
 git cherry-pick <commitHash>
 ```
-上面命令就会将指定的提交
-commitHash，应用于当前分支。这会在当前分支产生一个新的提交，当然它们的哈希值会不一样。
+上面命令就会将指定的提交commitHash，应用于当前分支。这会在当前分支产生一个新的提交，当然它们的哈希值会不一样。
 举例来说，代码仓库有master和feature两个分支。
 
 ```shell
@@ -296,7 +295,7 @@ git cherry-pick feature
 ```
 上面代码表示将feature分支的最近一次提交，转移到当前分支。
 
-7.2 >**转移多个提交**
+## 7.2 转移多个提交
 cherry-pick 支持一次转移多个提交。
 ```shell
 git cherry-pick <HashA> <HashB>
@@ -316,7 +315,7 @@ git cherry-pick A..B
 git cherry-pick A^..B 
 ```
 
-7.3 >**配置项**
+## 7.3 配置项
 git cherry-pick命令的常用配置项如下。
 （1）-e，--edit
 打开外部编辑器，编辑提交信息。
@@ -339,7 +338,7 @@ git cherry-pick -m 1 <commitHash>
 一般来说，1号父分支是接受变动的分支（the branch being merged into），2号父分支是作为变动来源的分支
 （the branch being merged from）。
 
-7.4 > **解决cherry-pick过程中的代码冲突**
+## 7.4 解决cherry-pick过程中的代码冲突
 如果操作过程中发生代码冲突，cherry-pick 会停下来，让用户决定如何继续操作。
 （1）--continue
 用户解决代码冲突后，第一步将修改的文件重新加入暂存区（git add .），第二步使用下面的命令，
@@ -359,7 +358,7 @@ git cherry-pick --abort
 git cherry-pick --quit
 ```
 
-7.5 > **转移至另一个代码库**
+## 7.5 转移至另一个代码仓库
 cherry-pick 也支持转移另一个代码库的提交，方法是先将该库加为远程仓库。
 
 ```shell
@@ -382,7 +381,7 @@ git log target/master
 git cherry-pick <commitHash>
 ```
 
-8 > **合并多个commit**
+# 8 合并多个commit
 在使用 git 作为版本控制的时候，我们可能会由于各种各样的原因提交了许多临时的 commit，而这些
 commit 拼接起来才是完整的任务。那么我们为了避免太多的 commit 而造成版本控制的混乱，通常我们
 推荐将这些 commit 合并成一个。
