@@ -44,7 +44,7 @@ func modifyFive(s []int) {
 	// []int{0, 1, 2, 2048}
 	fmt.Println(s1)
 	s2 := append(s, 4096)
-	// []int{0, 1, 2, 2048}, []int{0, 1, 2, 2048}, []int{0, 1, 2}
+	// []int{0, 1, 2, 4096}, []int{0, 1, 2, 4096}, []int{0, 1, 2}
 	fmt.Printf("in modifyFive s1 is:%v; s2 is:%v; s is: %v\n", s1, s2, s)
 }
 

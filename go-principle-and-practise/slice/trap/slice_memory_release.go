@@ -39,7 +39,7 @@ func testGetLast(t *testing.T, f func([]int) []int) {
 		origin := generateWithCap(128 * 1024)
 		result = append(result, f(origin))
 		// 如果显示开启GC，两者内存占用的差距会更加明显
-		//runtime.GC()
+		// runtime.GC()
 	}
 	printMem(t)
 	_ = result
