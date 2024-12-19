@@ -28,6 +28,74 @@ Go 常用来写后台服务，通常只需要几行代码，就可以搭建一�
 一个 http client 设置的读写超时时间不一样，这里不详细展开。可以去看看参考资料 【Go在今日头条的实践】一文，有很精彩的论述。
 context 包就是为了解决上面所说的这些问题而开发的：在 一组 goroutine 之间传递共享的值、取消信号、deadline……
 
+```golang
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"sync"
+	"time"
+)
+
+// 模拟下游服务的处理
+func callDownstreamService(ctx context.Context, serviceName string, wg *sync.WaitGroup, resultChan chan<- string) {
+	defer wg.Done() // 确保协程退出
+
+	// 为每个下游服务单独设置超时时间
+	serviceCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+
+	select {
+	case <-time.After(40 * time.Millisecond): // 模拟下游处理时间
+		resultChan <- fmt.Sprintf("%s: Success", serviceName)
+	case <-serviceCtx.Done(): // 如果超时或被取消
+		resultChan <- fmt.Sprintf("%s: Timeout", serviceName)
+	}
+}
+
+// 处理 HTTP 请求
+func handler(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
+	resultChan := make(chan string, 2) // 存储两个下游服务的结果
+
+	// 为整个请求设置 100ms 的整体超时时间
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// 启动多个下游服务调用
+	wg.Add(2)
+	go callDownstreamService(ctx, "Service A", &wg, resultChan)
+	go callDownstreamService(ctx, "Service B", &wg, resultChan)
+
+	// 等待所有协程完成
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// 收集结果
+	results := []string{}
+	for res := range resultChan {
+		results = append(results, res)
+	}
+
+	// 返回响应
+	w.WriteHeader(http.StatusOK)
+	for _, result := range results {
+		fmt.Fprintln(w, result)
+	}
+}
+
+func main() {
+	http.HandleFunc("/", handler)
+	fmt.Println("Server is running on :8080")
+	http.ListenAndServe(":8080", nil)
+}
+
+```
+
 用简练一些的话来说，在Go 里，我们不能直接杀死协程，协程的关闭一般会用 channel+select 方式来控制。但是在某些场景下，例如处理
 一个请求衍生了很多协程，这些协程之间是相互关联的：需要共享一些全局变量、有共同的 deadline 等，而且可以同时被关闭。再用
 channel+select 就会比较麻烦，这时就可以通过 context 来实现。

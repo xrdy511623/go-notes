@@ -44,7 +44,7 @@ func producer(srcChan chan int) {
 
 func consumer(srcChan chan int, resChan chan int, signalChan chan struct{}) {
 	for v := range srcChan {
-		// 多个协程向同一个通道发数据，并不会出现并发问题的。
+		// 多个协程向同一个通道发数据，并不会出现并发问题。
 		// 因为channel底层有lock用来保证每个读channel或写channel的操作都是原子的。
 		if check(v) {
 			resChan <- v

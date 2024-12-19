@@ -14,7 +14,7 @@ var u = user{name: "Ankur", age: 25}
 var g = &u
 
 func modifyUser(pu *user) {
-	fmt.Println("modifyUser Received Vaule", pu)
+	fmt.Println("modifyUser Received Value", pu)
 	pu.name = "Anand"
 }
 
@@ -28,7 +28,7 @@ func main() {
 	/*
 		输出:
 		&{Ankur 25}
-		modifyUser Received Vaule &{Ankur Anand 100}
+		modifyUser Received Value &{Ankur Anand 100}
 		printUser goRoutine called &{Ankur 25}
 		&{Anand 100}
 

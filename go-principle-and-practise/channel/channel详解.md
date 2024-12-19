@@ -3,6 +3,8 @@
 channel详解
 ---
 
+**不要通过共享内存来通信，而应该通过通信来共享内存**
+
 # 1 初始化
 声明和初始化管道的方式主要有以下两种:
 变量声明
@@ -68,7 +70,7 @@ v, ok := <-ch
 管道缓冲区还有数据。
 
 对于第一种情况，管道已关闭且缓冲区没有数据，那么管道读取表达式返回的第一个变量为相应类型的零值，第二个变量为false；
-对于第一种情况，管道已关闭且缓冲区还有数据，那么管道读取表达式返回的第一个变量为读取到的数据，第二个变量为true。
+对于第二种情况，管道已关闭且缓冲区还有数据，那么管道读取表达式返回的第一个变量为读取到的数据，第二个变量为true。
 
 ## 2.3 小结
 内置函数len() 和cap() 作用于管道，分别用于查询缓冲区中数据的个数及缓冲区的大小。
@@ -129,7 +131,7 @@ chan内部实现了一个环形队列作为其缓冲区，队列的长度是在�
 
 dataqsiz指示了队列长度为6，即可以缓存6个元素；
 buf指向队列的内存；
-qcount表示队列中还有两个元素；
+qcount表示队列中还有4个元素；
 sendx指示后续写入的数据存储的位置，这里为4；
 recvx指示后续从该位置读取数据，这里为0。
 
@@ -150,7 +152,7 @@ recvx指示后续从该位置读取数据，这里为0。
 一个管道只能传递一种类型的值，类型信息存储在hchan数据结构中。
 elemtype代表类型，用于在数据传递过程中赋值；
 elemsize代表类型大小，用于在buf中定位元素的位置。
-如果需要管道传递任意类型的数据，则可以使用interfac{}类型。
+如果需要管道传递任意类型的数据，则可以使用interface{}类型。
 
 ### 3.1.4 互斥锁
 一个管道同时仅允许被一个协程读写。
@@ -185,18 +187,69 @@ elemsize代表类型大小，用于在buf中定位元素的位置。
 ### 3.2.5 select
 使用select可以监控多个管道，当其中某一个管道可操作时就触发相应的case分支。
 如果多个管道都可操作时，会随机选出一个来读取。
-尽管管道中没有数据，select的case语句读管道时不也会阻塞，这是因为case语句编译后调用读管道时会明确传入不阻塞参数，
+尽管管道中没有数据，select的case语句读管道时也不会阻塞，这是因为case语句编译后调用读管道时会明确传入不阻塞参数，
 读不到数据时不会将当前协程加入recvq等待队列，而是直接返回。
 
 ### 3.2.6 for-range
 通过for-range可以持续地从管道中读取数据，好像在遍历一个数组一样，当管道中没有数据时会阻塞当前协程，与读管道时的阻塞
 处理机制一样。即便管道被关闭，for-range也可以优雅地结束。
+for-range 会阻塞等待管道中的数据。
+只有管道被关闭，for-range 才会优雅地结束循环。
+因此，在使用 for-range 遍历管道时，务必保证生产者 goroutine 在合适时机关闭管道，否则会触发死锁，比如下面这个案例：
 
+```go
+func main() {
+	ch := make(chan int)
 
+	go func() {
+		for i := 1; i <= 5; i++ {
+			ch <- i
+		}
+		// 注意：此处未关闭通道！
+	}()
+
+	for val := range ch {
+		fmt.Println(val)
+	}
+}
+
+执行代码会panic: fatal error: all goroutines are asleep - deadlock!
+
+```
+
+正确操作方式
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan int)
+
+	// 开启一个 goroutine 写入数据并关闭通道
+	go func() {
+		for i := 1; i <= 5; i++ {
+			ch <- i // 向通道写入数据
+			time.Sleep(500 * time.Millisecond)
+		}
+		close(ch) // 关闭通道
+	}()
+
+	// 使用 for-range 读取数据
+	for val := range ch {
+		fmt.Println(val)
+	}
+	fmt.Println("Channel closed, for-range exited.")
+}
+
+```
 
 # 4 管道发送和接收元素的本质是什么?
 
-管道 发送和接收元素的本质是什么？
+管道发送和接收元素的本质是什么？
 
 > All transfer of value on the go channels happens with the copy of value.
 
@@ -231,6 +284,34 @@ select {
    case <- s.stopc:
       return false
 }
+```
+
+```golang
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan int)
+	timer := time.NewTimer(3 * time.Second) // 设置 3 秒超时
+
+	go func() {
+		// 模拟长时间任务
+		time.Sleep(5 * time.Second)
+		ch <- 42 // 任务完成后向通道发送数据
+	}()
+
+	select {
+	case val := <-ch:
+		fmt.Println("Received:", val) // 如果任务在 3 秒内完成
+	case <-timer.C:
+		fmt.Println("Timeout!") // 如果 3 秒内未完成
+	}
+}
+
 ```
 
 等待 100 ms 后，如果 s.stopc 还没有读出数据或者被关闭，就直接结束。这是来自 etcd 源码里的一个例子，这样的写法随处可见。
