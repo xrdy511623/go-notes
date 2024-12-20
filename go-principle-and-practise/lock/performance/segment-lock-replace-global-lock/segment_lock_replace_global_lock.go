@@ -2,7 +2,7 @@ package segmentlockreplacegloballock
 
 import "sync"
 
-const SHARD_COUNT = 32
+const ShardCount = 32
 
 type Map interface {
 	Set(key, value string)
@@ -42,9 +42,9 @@ type SubMap struct {
 }
 
 func NewSegmentMap() SegmentMap {
-	// SHARD_COUNT  默认32个分片
-	m := make(SegmentMap, SHARD_COUNT)
-	for i := 0; i < SHARD_COUNT; i++ {
+	// ShardCount  默认32个分片
+	m := make(SegmentMap, ShardCount)
+	for i := 0; i < ShardCount; i++ {
 		m[i] = &SubMap{
 			items: make(map[string]string, 30),
 		}
@@ -53,7 +53,7 @@ func NewSegmentMap() SegmentMap {
 }
 
 func (m SegmentMap) GetShard(key string) *SubMap {
-	return m[uint(fnv32(key))%uint(SHARD_COUNT)]
+	return m[uint(fnv32(key))%uint(ShardCount)]
 }
 
 // FNV hash
@@ -85,7 +85,7 @@ func (m SegmentMap) Get(key string) (value string) {
 // Count 统计当前分段map中item(键值对)的个数
 func (m SegmentMap) Count() int {
 	count := 0
-	for i := 0; i < SHARD_COUNT; i++ {
+	for i := 0; i < ShardCount; i++ {
 		shard := m[i]
 		shard.RLock()
 		count += len(shard.items)
@@ -102,7 +102,7 @@ func (m SegmentMap) Keys() []string {
 	// 每一个分片启动一个协程 遍历key
 	go func() {
 		wg := sync.WaitGroup{}
-		wg.Add(SHARD_COUNT)
+		wg.Add(ShardCount)
 		for _, shard := range m {
 			go func(shard *SubMap) {
 				defer wg.Done()

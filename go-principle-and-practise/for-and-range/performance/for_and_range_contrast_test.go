@@ -9,7 +9,7 @@ type Item struct {
 	val [4096]byte
 }
 
-// 当遍历对象是int数组(切片)时，for与range相比几乎没有性能差异
+// 当遍历对象是int数组(切片)时，for与range相比几乎没有性能差异，因为遍历的每个元素都是数字，本身占用内存很小
 func BenchmarkForIntSlice(b *testing.B) {
 	nums := GenerateWithCap(1024 * 1024)
 	for i := 0; i < b.N; i++ {
@@ -41,7 +41,7 @@ Item 实例需要申请约 4KB 的内存。
 在这个例子中，for 的性能大约是 range (同时遍历下标和值) 的 500 倍。
 
 与 for循环不同的是，range 对每个迭代值都创建了一个拷贝。因此如果每次迭代的值内存占用很小的情况下，for 和 range
-的性能几乎没有差异，但是如果每个迭代值内存占用很大，例如上面的例子中，每个结构体需要占据 4KB 的内存，这种情况下差距
+的性能几乎没有差异，但是如果每个迭代值内存占用很大，例如上面的例子中，每个结构体需要占据 4KB 的内存，这种情况下性能差距
 就非常明显了。
 */
 func BenchmarkForStruct(b *testing.B) {
@@ -78,7 +78,7 @@ func BenchmarkRangeStruct(b *testing.B) {
 	}
 }
 
-// 如果切片或数组中是结构体的指针呢？
+// 如果切片或数组中的元素是结构体的指针呢？
 // 从测试结果来看，切片元素从结构体替换为指针后，for 和 range 的性能几乎是一样的。
 // 而且使用指针还有另一个好处，可以直接修改指针对应的结构体的值。
 func generateItems(n int) []*Item {

@@ -26,7 +26,7 @@ go get会下载最新版本的包到src目录下
 
 存在的问题：
 在类似下面的场景中(A和B依赖于某一package的不同版本)，无法实现包(package)的多版本控制。
-因为src目录下只能有一个版本存在，那A和B两个项目只能有一个编译通过，显然无法满足我们的需求。
+因为src目录下只能有一个版本存在，那A和B两个项目只能有一个编译通过，这显然无法满足我们的需求。
 
 ![GOPATH.png](images%2FGOPATH.png)
 
@@ -80,6 +80,20 @@ github.com/gin-gonic/gin是gin包的模块路径，从这个路径可以看出�
 不同的Major版本表示是不兼容的API，所以即使是同一个库(包)，Major版本不同也会被认为是不同的模块；Minor版本通常是新增函数
 或功能，向后兼容；而patch版本一般是修复bug。
 
+Minor版本向后兼容意味着：
+新增功能不会破坏已有功能：
+新增的函数、方法、类型或特性只会扩展库的功能，而不会移除或修改已有的 API。
+客户端代码如果依赖旧版本的功能，在更新到新的 Minor 版本时可以继续正常运行。
+
+接口不变：
+已有的函数签名、类型定义、常量等不会改变。
+不会删除已公开的任何 API。
+
+不引入破坏性变更：
+不改变已有 API 的行为（例如输入相同的参数会返回相同的结果）。
+
+如果需要进行不向后兼容的更改，例如删除函数或改变函数行为，那么应该增加 Major 版本号。例如，从 v1.x.x 更新到 v2.0.0。
+
 > 依赖配置-version
 
 语义化版本
@@ -102,8 +116,45 @@ A->B->C
 github.com/uber/jaeger-client-go v2.29.1+incompatible
 
 主版本2+模块会在模块路径增加/vN后缀，这能让go module按照不同的模块来处理同一个项目不同主版本的依赖。由于Go Module是
-Go 1.11实验性引入的，所以这项规则提出之前已经有一些仓库打上了2或者更高版本的tag了，为了兼容这部分仓库，对于没有go.mod
+Go 1.11实验性引入的，所以这项规则提出之前已经有一些仓库打上了2或者更高版本的tag了，为了兼容这部分仓库，对于没有使用go.mod
 文件并且主版本在2或者以上的依赖，会在版本号后加上+incompatible后缀。
+
+normal-go-mod.png
+
+incompatible-no-go-mod.png
+
+**什么情况下会出现 +incompatible**
+未使用 Go Modules 的旧库：
+如果一个库发布的版本号大于 v2（例如 v2.x.x），但它没有提供 go.mod 文件，那么 Go 会在模块版本号后添加 +incompatible，
+表示它不完全兼容 Go Modules。
+
+未遵循 Go Modules 的规则：
+根据 Go Modules 的规则，如果库的 Major 版本号大于等于 2（例如 v2.x.x），模块的导入路径必须包含 Major 版本号
+（即路径应为 module/path/v2）。如果库未遵守这一规则，则会被标记为 +incompatible。
+
+示例分析
+库未使用 Go Module： 假设 github.com/uber/jaeger-client-go 发布了 v2.29.1 版本，但它没有 go.mod 文件。
+由于缺少 go.mod，Go Modules 无法判断模块是否完全支持模块化，因此会标记为 +incompatible。
+
+库未调整导入路径： 如果该库的导入路径仍是 github.com/uber/jaeger-client-go（没有包含 /v2），即使有 go.mod，
+也会标记为 +incompatible。
+
+使用 +incompatible 的模块
+即使标记为 +incompatible，这些模块仍然可以正常使用，但需要注意：
+导入路径不会包含版本号（例如，直接使用 github.com/uber/jaeger-client-go）。
+需要手动检查兼容性，确保该模块与您的代码或其他依赖项不会冲突。
+
+如何解决 +incompatible？
+如果您是模块的维护者，可以通过以下方式消除 +incompatible：
+添加 go.mod 文件：
+使用 go mod init 命令生成 go.mod 文件，明确声明模块化支持。
+
+调整导入路径：
+如果 Major 版本号 >= 2，更新模块路径为 module/path/v2 并在 go.mod 中声明，例如：
+
+```go
+module github.com/uber/jaeger-client-go/v2
+```
 
 如果X项目依赖了A、B两个项目，且A、B分别依赖了C项目的v1.3、V1.4两个版本，最终编译时所使用的C项目的版本是?
 A v1.3

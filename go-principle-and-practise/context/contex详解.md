@@ -301,7 +301,7 @@ func (c *cancelCtx) cancel(removeFromParent bool, err error) {
 }
 ```
 
-总体来看， cancel() 方法的功能就是关闭 channel：c.done；递归地取消它的所有子节点；从父节点从删除自己。达到的效果
+总体来看， cancel() 方法的功能就是关闭 channel：c.done；递归地取消它的所有子节点；从父节点中删除自己。达到的效果
 是通过关闭 channel，将取消信号传递给了它的所有子节点。goroutine 接收到取消信号的方式就是 select 语句中的读c.done
 被选中。
 我们再来看创建一个可取消的 Context 的方法：
@@ -694,7 +694,8 @@ context 会在函数间传递。只需要在适当的时间调用 cancel 函数�
 2. Do not pass a nil Context, even if a function permits it. Pass context.TODO if you are unsure about which Context to use.
 3. Use context Values only for request-scoped data that transits processes and APIs, not for passing optional parameters to functions.
 4. The same Context may be passed to functions running in different goroutines; Contexts are safe for simultaneous use by multiple goroutines.
-   我翻译一下：
+
+**我翻译一下：**
 1. 不要将 Context 塞到结构体里。直接将 Context 类型作为函数的第一参数，而且一般都命名为 ctx。
 2. 不要向函数传入一个 nil 的 context，如果你实在不知道传什么，标准库给你准备好了一个 context：todo。
 3. 不要把本应该作为函数参数的类型塞到 context 中，context 存储的应该是一些共同的数据。例如：登陆的 session、cookie 等。
@@ -782,7 +783,7 @@ func main() {
 
 # 4.2 取消 goroutine
 我们先来设想一个场景：打开外卖的订单页，地图上显示外卖小哥的位置，而且是每秒更新 1 次。app 端向后台发起 websocket 
-连接（现实中可能是轮询）请求后，后台启动一个协程，每隔 1 秒计算 1 次小哥的位置，并发送给端。如果用户退出此页面，则
+连接（现实中可能是轮询）请求后，后台启动一个协程，每隔 1 秒计算 1 次小哥的位置，并发送给 app 端。如果用户退出此页面，则
 后台需要“取消”此过程，退出 goroutine，系统回收资源。
 
 后端可能的实现如下：

@@ -35,6 +35,6 @@ func helloWorld(m *sync.Mutex) {
 
 func main() {
 	var m sync.Mutex
-	//HelloWorld(&m)
-	helloWorld(&m)
+	HelloWorld(&m)
+	//helloWorld(&m)
 }

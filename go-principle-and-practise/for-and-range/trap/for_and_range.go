@@ -19,7 +19,7 @@ func main() {
 	/*
 		persons 是一个长度为 3 的切片，每个元素是一个结构体。
 		使用 range 迭代时，试图将每个结构体的 age 字段增加 10，但修改无效，因为 range 返回的是拷贝。
-		使用 for 迭代时，将每个结构体的 age 字段增加 20，修改有效。
+		使用 for 迭代时，将每个(元素)结构体的 age 字段增加 20，修改有效。
 		结论：range 迭代时，返回的是拷贝。
 	*/
 	// [{Name:John Age:37} {Name:Tom Age:38} {Name:Jack Age:39}]
