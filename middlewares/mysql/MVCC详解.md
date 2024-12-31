@@ -107,7 +107,7 @@ REPEATABLE READ隔离级别的事务来说，都必须保证读到已经提交�
 
 接下来看一下READ COMMITTED和REPEATABLE READ所谓的生成ReadView的时机不同到底不同在哪里。
 
-> READ COMMITTED —— 每次读取数据前都生成一个ReadView
+## 2.1 READ COMMITTED(读取已提交) —— 每次读取数据前都生成一个ReadView
 
 比方说现在系统里有两个事务id分别为100、200的事务在执行：
 
@@ -212,11 +212,11 @@ SELECT * FROM hero WHERE number = 1; # 得到的列name的值为'张飞'
 - 下一个版本的列name的内容是'赵云'，该版本的trx_id值为200，也在m_ids列表内，所以也不符合要求，继续跳到下一个版本。
 - 下一个版本的列name的内容是'张飞'，该版本的trx_id值为100，小于ReadView中的min_trx_id值200，所以这个版本是符合要求的，最后返回给用户的版本就是这条列name为'张飞'的记录。
 
-以此类推，如果之后事务id为200的记录也提交了，再次在使用READ COMMITTED隔离级别的事务中查询表hero中number值为1的记录时，得到的结果就是'诸葛亮'了，
+依此类推，如果之后事务id为200的记录也提交了，再次在使用READ COMMITTED隔离级别的事务中查询表hero中number值为1的记录时，得到的结果就是'诸葛亮'了，
 具体流程我们就不分析了。总结一下就是：使用READ COMMITTED隔离级别的事务在每次查询开始时都会生成一个独立的ReadView。
 
 
-> REPEATABLE READ —— 在第一次读取数据时生成一个ReadView
+## 2.2 REPEATABLE READ(可重复读) —— 只在第一次读取数据时生成一个ReadView，以后复用此ReadView
 
 对于使用REPEATABLE READ隔离级别的事务来说，只会在第一次执行查询语句时生成一个ReadView，之后的查询就不会重复生成了，而是复用这个ReadView。
 我们还是用例子看一下是什么效果。
