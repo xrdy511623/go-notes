@@ -575,8 +575,7 @@ c=15的记录上加的是间隙锁(10,15)，故session A对索引c的最终加�
 
 
 
-结论: 在8.0.13版本前，session B的插入操作会阻塞。
-在8.0.25版本及以后，session B的插入操作可以正常执行。
+结论: session B的插入操作会阻塞，最后失败。
 分析: 由于是order by c desc, 第一个要定位是索引c上最右边的c=20那一行，所以会加上间隙锁(20,25)和next-key lock(15,20]
 因为是desc降序排序，所以会在索引c上向左遍历，要扫描到c=10才停下来(会查到第一个不满足条件的行为止)，所以next-key lock会加到(5,10], 
 这正是阻塞session B的插入(6,6,6)操作的原因。
@@ -585,7 +584,24 @@ c=15的记录上加的是间隙锁(10,15)，故session A对索引c的最终加�
 索引c上(5,25)
 主键索引上id=15, id=20两个行锁。
 
-但是在8.0.25及以后的版本中，对加锁范围进行了优化，不会加(5,10]的next-key lock，session B的插入操作可以正常执行。
+验证结论:
+
+
+
+
+
+![suspect.png](images%2Fsuspect.png)
+
+
+
+
+![suspect-one.png](images%2Fsuspect-one.png)
+![suspect-two.png](images%2Fsuspect-two.png)
+![suspect-three.png](images%2Fsuspect-three.png)
+![suspect-four.png](images%2Fsuspect-four.png)
+
+可以看到，加锁范围是字段c上的(5,10],(10,15],(15,20]上的next-key lock以及(20,25)上的间隙锁，
+以及主键id上的id=15,20两个行锁。
 
 
 ## case10  加锁是分步加的，不是一次性加上的
