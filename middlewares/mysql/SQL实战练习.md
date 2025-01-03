@@ -7,7 +7,7 @@ SQL实战
 你写出对应的SQL语句，今天我们来看看常见的SQL查询需求应该如何实现。
 
 
-> case1: 查询employee表中第n高的薪水是多少？
+# case1: 查询employee表中第n高的薪水是多少？
 
 通用的思路是：
 
@@ -22,7 +22,7 @@ select ifNull((select distinct salary from employee order by salary desc limit 4
 fifth_highest;
 ```
 
-> case2: 编写一个SQL查询来实现分数排名。
+# case2: 编写一个SQL查询来实现分数排名。
 
 如果两个分数相同，则两个分数排名（Rank）相同。请注意，平分后的下一个名次应该是下一个连续的整数值。换句话说，
 名次之间不应该有“间隔”。
@@ -74,6 +74,10 @@ select a.Score as Score,
 from Scores a order by a.Score desc;
 ```
 
+```sql
+select score, DENSE_RANK() over(order by score desc) as `Rank` from ranks;
+```
+
 第二个思路：不讲码德，直接使用窗口函数
 现在给定五个成绩：99，99，85，80，75。
 DENSE_RANK()，如果使用 DENSE_RANK() 进行排名会得到：1，1，2，3，4；
@@ -85,7 +89,7 @@ ROW_NUMBER()，如果使用 ROW_NUMBER() 进行排名会得到：1，2，3，4�
 select Score, DENSE_RANK() over(order by Score desc) as `Rank` from Scores;
 ```
 
-> case3：部门工资最高的员工
+# case3：部门工资最高的员工
 
 Employee表包含所有员工信息，每个员工有其对应的Id, salary 和 department Id。
 
@@ -118,13 +122,13 @@ Department表包含公司所有部门的信息。
 多表连接Join查询,通过where做条件筛选，筛选条件为部门ID与薪资匹配照部门分组查询最高工资的查询结果。
 
 ```sql
-select Department.name as `Department`, Employee.Name as `Employee`, 
-Salary from Employee join Department on Employee.DepartmentId = Department.Id 
-where (Employee.DepartmentId, Salary) in
+select d.name as `Department`, e.Name as `Employee`,
+e.Salary as `Salary` from Employee e join Department d on e.DepartmentId = d.Id 
+where (e.DepartmentId, e.Salary) in
 (select DepartmentId, max(Salary) from Employee group by DepartmentId );
 ```
 
-> case4:超过经理收入的员工
+# case4:超过经理收入的员工
 
 Employee表包含所有员工，他们的经理也属于员工。每个员工都有一个Id，此外还有一列对应员工的经理的Id。
 
@@ -146,8 +150,13 @@ select a.Name as `Employee` from Employee a inner join Employee b
 on a.ManagerId = b.Id where a.Salary > b.Salary;
 ```
 
+下面这样更直观些
+```sql
+select a.Name as `Employee`, a.Salary as `employee_salary`, a.ManagerId as `manager_id`, b.Name as `manager`, 
+b.Salary as `manager_salary` from Employee a inner join Employee b on a.ManagerId = b.Id where a.Salary > b.Salary;
+```
 
-> case5: 部门工资前三的所有员工
+# case5: 部门工资前三的所有员工
 
 编写一个SQL 查询，找出每个部门获得前三高工资的所有员工。
 
@@ -212,10 +221,10 @@ and e1.DepartmentId = e2.DepartmentId)
 select d.Name as Department, e.Name as Employee, e.Salary from (
 select *, dense_rank() over(partition by DepartmentId order by Salary desc) 
 as r from Employee)e 
-inner join Department d on e.DepartmentId = d.Id and r <= 3;
+inner join Department d on e.DepartmentId = d.Id and e.r <= 3;
 ```
 
-> case6: 寻找重复的电子邮箱
+# case6: 寻找重复的电子邮箱
 
 编写一个SQL查询，查找Person表中所有重复的电子邮箱。
 
@@ -245,7 +254,7 @@ where t.count > 1;
 select Email from Person group by Email having count(Email) > 1;
 ```
 
-> case7: 从不订购的客户
+# case7: 从不订购的客户
 
 两个表，Customers表和Orders表。编写一个SQL查询，找出所有从不订购任何东西的客户。
 Customers表：
@@ -288,7 +297,7 @@ select a.Name as `customers` from Customers a left join Orders b
 on a.Id = b.CustomerId where b.CustomerId is null;
 ```
 
-> case8: 删除重复的电子邮箱
+# case8: 删除重复的电子邮箱
 
 编写一个 SQL 查询，来删除Person表中所有重复的电子邮箱，重复的邮箱里只保留Id最小的那个。
 
@@ -309,11 +318,10 @@ on a.Id = b.CustomerId where b.CustomerId is null;
 思路: 自连接查询解决
 
 ```sql
-delete p1 from Person p1 join Person p2 where p1.Email = p2.Email 
-and p1.Id > p2.Id;
+delete p1 from Person p1 join Person p2 where p1.Email = p2.Email and p1.Id > p2.Id;
 ```
 
-> case9: 连续出现的数字
+# case9: 连续出现的数字
 
 编写一个 SQL 查询，查找所有至少连续出现三次的数字。
 
@@ -338,12 +346,12 @@ and p1.Id > p2.Id;
 思路: 多表自连接查询解决
 
 ```sql
-select distinct l1.Num as ConsecutiveNums from logs l1 inner join logs l2 
-inner join logs l3 where l1.Id = l2.Id -1 and l2.Id = l3.Id - 1 
+select distinct l1.Num as ConsecutiveNums from logs l1 join logs l2 
+join logs l3 where l1.Id = l2.Id -1 and l2.Id = l3.Id - 1 
 and l1.Num = l2.Num and l2.Num = l3.Num;
 ```
 
-> case10: 查询两门及以上课程不及格的同学的学号和姓名
+# case10: 查询两门及以上课程不及格的同学的学号和姓名
 
 studentScore表
 
@@ -398,37 +406,37 @@ group by studentNo having count(courseNo) >=2);
 
 如果还需要获取这些同学不及格科目的成绩的话，就需要联表查询了
 ```sql
-select s.studentNo, s.name, ss.score from student s inner join studentScore ss 
+select s.studentNo, s.name, ss.courseNo, ss.score from student s inner join studentScore ss 
 on s.studentNo = ss.studentNo where s.studentNo in 
 (select studentNo from studentScore where score < 60 
 group by studentNo having count(courseNo) >=2);
 ```
 
-> case11: 查询所有课程成绩都小于90分的学生的学号, 姓名
+# case11: 查询所有课程成绩都小于90分的学生的学号, 姓名
 
 思路：临时表, 多表连接查询和子查询解决
 
 ```sql
 select s.studentNo, s.name from student s inner join 
-(select studentNo, count(courseNo) as count from studentScore group
+(select studentNo, count(courseNo) as cnt from studentScore group
 by studentNo) t on s.studentNo = t.studentNo where s.studentNo in 
-(select studentNo from score where score < 90 group by studentNo 
-having count(courseNo) = t.count);
+(select studentNo from studentScore where score < 90 group by studentNo 
+having count(courseNo) = t.cnt);
 ```
 
-> case12: 查询没有学全所有课的学生的学号、姓名
+# case12: 查询没有学全所有课的学生的学号、姓名
 
 思路：第一步，统计所有学生所修课程的数量count，筛选出count小于课程总数的记录；
 第二步，在学生表中通过范围查询统计出学号在第一步结果的学号范围的学生。
 
 ```sql
 select s.studentNo, s.name from student s inner join (select studentNo, 
-count(courseNo) as count from studentScore group by studentNo) t 
-on s.studentNo = t.studentNo where t.count < (select count(distinct courseNo) 
-from score);
+count(courseNo) as cnt from studentScore group by studentNo) t 
+on s.studentNo = t.studentNo where t.cnt < (select count(distinct courseNo) 
+from studentScore);
 ```
 
-> case13: 日期函数的使用
+# case13: 日期函数的使用
 
 a 1990年出生的学生
 
@@ -445,10 +453,10 @@ select studentNo, name, timestampdiff(year, birthday, now()) as age from student
 c 查询本月过生日的学生
 
 ```sql
-select name, birthday from student where month (birthday) = month(now());
+select name, birthday from student where month(birthday) = month(now());
 ```
 
-> case14: 多表连接查询练习
+# case14: 多表连接查询练习
 
 a 查询所有学生的学号、姓名、选课数、总成绩
 
@@ -504,7 +512,7 @@ where c.courseName = "数学" and b.score < 90;
 g 查询至少有一门课程成绩在70分以上的学生姓名、课程名称和分数
 
 ```sql
-select a.name, c.courseName, b.score from student a inner join score b 
+select a.name, c.courseName, b.score from student a inner join studentScore b 
 on a.studentNo = b.studentNo inner join course c on b.courseNo = c.courseNo 
 where b.score > 70;
 ```
@@ -547,10 +555,10 @@ j 查询任何一门课程成绩均在70分以上的学生姓名、课程名称�
 ```sql
 select a.studentNo, a.name, c.courseName, b.score from student a inner join 
 studentScore b on a.studentNo = b.studentNo inner join course c on b.courseNo = c.courseNo 
-inner join (select studentNo, count(courseNo) as count from studentScore
+inner join (select studentNo, count(courseNo) as cnt from studentScore
 group by studentNo) t on b.studentNo = t.studentNo where a.studentNo in 
 (select studentNo from studentScore where score > 70 group by studentNo 
-having count(courseNo) = t.count);
+having count(courseNo) = t.cnt);
 ```
 
 k 查询学过编号为1的课程并且也学过编号为2的课程的学生学号,姓名
@@ -581,7 +589,7 @@ studentScore group by courseNo) s on c.courseNo = s.courseNo
 inner join teacher t on c.teacherNo = t.teacherNo order by s.avgScore desc;
 ```
 
-n 查询不同课程成绩相同的学生的学号, 姓名, 课程编号, 成绩信息
+n 查询课程不同但成绩相同的学生的学号, 姓名, 课程编号, 成绩信息
 
 ```sql
 select s.studentNo, s.name, t.courseNo, t.score from student s inner join
@@ -645,7 +653,7 @@ studentNo from studentScore where courseNo in ( select courseNo from studentScor
 where studentNo = 1)) and studentNo != 1;
 ```
 
-> 分段统计
+# case 15 分段统计
 
 a 统计出每门课程的及格人数和不及格人数
 
@@ -667,7 +675,8 @@ from studentScore s inner join course c on s.courseNo = c.courseNo
 group by s.studentNo;
 ```
 
-> case16: （窗口函数强化）查询所有课程成绩第2名到第3名的学生及该课程成绩
+
+# case16: （窗口函数强化）查询所有课程成绩第2名到第3名的学生及该课程成绩
 
 ```sql
 select b.name, a.courseNo, a.score from (select courseNo, studentNo, score,
@@ -676,7 +685,7 @@ from studentScore) a inner join student b on a.studentNo = b.studentNo
 where a.ranking in( 2,3);
 ```
 
-> case17: 查询北京和上海工作岗位数量及其占比
+# case17: 查询北京和上海工作岗位数量及其占比
 
 ```sql
 select bj_job_count, concat(round((bj_job_count/job_count)*100, 2),'%') 
@@ -688,7 +697,7 @@ join (select count(distinct url_object_id) as sh_job_count from lagou_job
 where location like "上海%") c;
 ```
 
-> case18: 查询各城市工作岗位数量及其占比，按岗位数降序排序，取前10名
+# case18: 查询各城市工作岗位数量及其占比，按岗位数降序排序，取前10名
 
 ```sql
 select work_city, number, concat(round(number/total*100.00, 2), '%') as rate 
@@ -697,14 +706,14 @@ lagou_job group by work_city) t1 inner join (select count(url_object_id) as
 total from lagou_job) t2 on 1 = 1) t order by number desc limit 10;
 ```
 
-> case19: 查询所有商家的所有品牌的销量信息，按商家升序排序，按销量降序排序
+# case19: 查询所有商家的所有品牌的销量信息，按商家升序排序，按销量降序排序
 
 ```sql
-select storeId, brandId, count(orderId) as count from sales group by storeId, 
-brandId order by storeId, count desc;
+select storeId, brandId, count(orderId) as cnt from sales group by storeId, 
+brandId order by storeId, cnt desc;
 ```
 
-> case20: 两数据列运算产生新数据列，并且要按照这个新数据列排序
+# case20: 两数据列运算产生新数据列，并且要按照这个新数据列排序
 
 a, b都是数据列，现在要产生一个指标数据列，值为a/b，同时要处理除0错误，若b为0，显示0
 
