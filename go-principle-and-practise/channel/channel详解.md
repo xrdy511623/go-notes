@@ -400,11 +400,13 @@ var limit = make(chan int, 3)
 func main() {
     // …………
     for _, w := range work {
-        go func() {
+        go func(w work) {
             limit <- 1
             w()
-            <-limit
-        }()
+            defer func() {
+                <-limit
+            }       
+        }(w)
     }
     // …………
 }

@@ -667,3 +667,162 @@ if h.flags&hashWriting == 0 {
 ```golang
 h.flags |= hashWriting
 ```
+
+游戏排行榜系统
+
+背景
+
+你正在为一个多人在线游戏开发一个全服排行榜系统，该系统需要追踪玩家获得的积分，实时更新排名，并提供排行榜实时查询功能。
+
+请根据个人技术特长 ，编程语言不限 ，优先使用 Go。
+
+如无不便 ，请使用 github.com，gitlab.com 或 gitee.com 提交答案 ， 回复公开代码库地址即可。
+
+一、基础功能实现
+
+请实现一个基础的排行榜系统，包含以下功能：
+
+1.支持更新玩家积分。
+
+2.查询玩家当前排名。
+
+3.获取前 N 名玩家的分数和名次。
+
+4.查询自己名次前后共 N 名玩家的分数和名次。
+
+排名规则如下：
+
+1.分数从高到低进行排序。
+
+2.如果多位玩家分数相同 ，则先得到该分数的玩家排在前面。
+
+接口定义示例
+
+```go
+interface LeaderboardService {
+// 更新玩家分数
+updateScore(playerId string, score int, timestamp int);
+
+// 获取玩家当前排名
+getPlayerRank(playerId string)
+
+// 获取排行榜前N名
+getTopN(n int) []RankInfo
+
+// 获取玩家周边排名
+getPlayerRankRange(playerId string, range int) []RankInfo
+}
+```
+
+
+
+
+二、系统设计
+
+可以使用UML图或线框图辅助表达设计
+
+**可靠性要求**
+
+考虑到排行榜系统需要 7*24 小时运行，且需要确保数据的一致性和完整性，请说明你会如何设计系统来满足可靠性要求。
+
+**性能要求**
+
+考虑到排行榜系统需要实时查询和更新，且总玩家数量可达到百万级，请说明你会如何设计系统来满足性能要求。
+
+
+
+三、游戏需求更改（选做）
+
+假如游戏设计师想让获得相同成绩的玩家享有同等的荣誉，所以计划调整为采用"密集排名"的计算方式，请说明你会如何修改实现来满足新的游戏需求。
+
+新的排名规则如下：
+
+1.分数依旧从高到低排序。
+
+2.对于分数相同的玩家，将获得完全相同的排名位次。
+
+3.当出现新的不同分数时，该玩家的排名将在上一个排名基础上递增 1 位。
+
+举例说明：
+
+Plain Text
+- 玩家A：100分 → 排名第1
+- 玩家B：100分 → 排名第1
+- 玩家C：95分  → 排名第2
+- 玩家D：95分  → 排名第2
+- 玩家E：90分  → 排名第3
+
+
+我建议使用redis的分片集群(比如codis或官方的redis cluster)来分担高并发请求压力，单个redis实例可以扛住大概10万并发(每秒)，按照最高标准，
+100万用户每秒就是100万并发，所以我们可以使用10个节点组成redis分片集群来存储数据以及应对读写请求，RDB+AOF混合持久化策略确保不丢数据，
+主从同步和哨兵集群实现自动故障转移，这些注意确保redis服务的高可用。使用zset有序集合处理这种排行榜问题最为合适，但是存在以下几个问题，
+首先，每个分片存储约10万玩家数据，并使用zset进行存储，zadd leaderboard score playerId，这是否会有大key的问题，redis是用单线程
+来处理数据读写请求的，大key请求会阻塞主线程，影响性能；第二，每个分片存储约10万玩家数据，而需求是获取玩家的全局排名，每个分片只能获取
+到该分片上的局部排名(10万条数据中的排名)，难不成要从10个分片获取所有玩家数据到本地进行统一排名，这样计算量可就大了，肯定耗时长；
+第三，如果想使用ziplist编码存储小对象，可是有序集合zset只有在集合元素数量少(默认阈值是512个)或集合中单个元素占用内存比较小的情况才会
+使用ziplist存储，否则会使用跳表skiplist。请你在我的代码基础上进一步完善，解决我提到的这几个问题，请给出具体的go代码实现，不要泛泛而谈。
+
+
+以下是我的代码实现思路
+
+```go
+package main
+
+import (
+	"github.com/go-redis/redis/v8"
+)
+
+type LeaderboardService interface {
+	UpdateScore(playerId string, score int, timestamp int)
+	GetPlayerRank(playerId string) int
+	GetTopN(n int) []RankInfo
+	GetPlayerRankRange(playerId string, r int) []RankInfo
+}
+
+type RedisLeaderboard struct {
+	client *redis.Client
+}
+
+type RankInfo struct {
+	PlayerID string
+	Score    int
+	Rank     int
+}
+
+// 用组合分数保证排序规则：主分数 + 时间戳反序
+func (r *RedisLeaderboard) UpdateScore(playerId string, score int, timestamp int) {
+	// 将时间戳转换为补数用于排序
+	combinedScore := float64(score) + (1 - float64(timestamp)/1e12)
+	r.client.ZAdd(ctx, "leaderboard", &redis.Z{
+		Score:  combinedScore,
+		Member: playerId,
+	})
+}
+
+func (r *RedisLeaderboard) GetPlayerRank(playerId string) int {
+	rank, _ := r.client.ZRevRank(ctx, "leaderboard", playerId).Result()
+	return int(rank) + 1 // Redis从0开始
+}
+
+func (r *RedisLeaderboard) GetTopN(n int) []RankInfo {
+	res, _ := r.client.ZRevRangeWithScores(ctx, "leaderboard", 0, int64(n-1)).Result()
+	return parseResult(res)
+}
+
+func (r *RedisLeaderboard) GetPlayerRankRange(playerId string, r int) []RankInfo {
+	rank := r.GetPlayerRank(playerId)
+	start := max(0, rank-1-r)
+	res, _ := r.client.ZRevRangeWithScores(ctx, "leaderboard", start, start+2*r).Result()
+	return parseResult(res)
+}
+
+
+// 修改后的排名计算方法
+func (r *RedisLeaderboard) GetDenseRank(playerId string) int {
+	score, _ := r.client.ZScore(ctx, "leaderboard", playerId).Result()
+	// 获取大于当前分数的元素个数即为排名
+	count, _ := r.client.ZCount(ctx, "leaderboard",
+		fmt.Sprintf("(%f", score), "+inf").Result()
+	return int(count) + 1
+}
+```

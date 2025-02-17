@@ -26,3 +26,17 @@ func EnhanceLoop(s []int) {
 		_ = s[i]
 	}
 }
+
+type Ordered interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
+	~float32 | ~float64
+}
+
+// Max使用泛型来比较两个同类型的值（要求类型是可比较的），并返回较大的值
+func Max[T Ordered](a, b T) T {
+	if a > b {
+		return a
+	}
+	return b
+}
