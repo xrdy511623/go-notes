@@ -668,161 +668,203 @@ if h.flags&hashWriting == 0 {
 h.flags |= hashWriting
 ```
 
-游戏排行榜系统
+# 11 map gc优化
 
-背景
+如果我们在本地缓存大量数据，如何避免 GC 导致的性能开销？
 
-你正在为一个多人在线游戏开发一个全服排行榜系统，该系统需要追踪玩家获得的积分，实时更新排名，并提供排行榜实时查询功能。
-
-请根据个人技术特长 ，编程语言不限 ，优先使用 Go。
-
-如无不便 ，请使用 github.com，gitlab.com 或 gitee.com 提交答案 ， 回复公开代码库地址即可。
-
-一、基础功能实现
-
-请实现一个基础的排行榜系统，包含以下功能：
-
-1.支持更新玩家积分。
-
-2.查询玩家当前排名。
-
-3.获取前 N 名玩家的分数和名次。
-
-4.查询自己名次前后共 N 名玩家的分数和名次。
-
-排名规则如下：
-
-1.分数从高到低进行排序。
-
-2.如果多位玩家分数相同 ，则先得到该分数的玩家排在前面。
-
-接口定义示例
+我们以下面的代码为例，分别测试 key、value 为 string 类型的 map 在不同数据规模下的 GC 开销。
 
 ```go
-interface LeaderboardService {
-// 更新玩家分数
-updateScore(playerId string, score int, timestamp int);
+package optimize_gc
 
-// 获取玩家当前排名
-getPlayerRank(playerId string)
+import (
+	"fmt"
+	"runtime"
+	"testing"
+	"time"
+)
 
-// 获取排行榜前N名
-getTopN(n int) []RankInfo
+func GenerateStringMap(size int) map[string]string {
+	// 在这里执行一些可能会触发GC的操作，例如创建大量对象等
+	// 以下示例创建一个较大的map并填充数据
+	m := make(map[string]string)
+	for i := 0; i < size; i++ {
+		key := fmt.Sprintf("key_%d", i)
+		value := fmt.Sprintf("val_%d", i)
+		m[key] = value
 
-// 获取玩家周边排名
-getPlayerRankRange(playerId string, range int) []RankInfo
+	}
+	return m
+}
+
+// TestSmallBatchGCDuration 测试小规模数据gc时长
+func TestSmallBatchGCDuration(t *testing.T) {
+	size := 1000
+	m := GenerateStringMap(size)
+	runtime.GC()
+	gcCost := timeGC()
+	t.Logf("size %d GC duration: %v\n", size, gcCost)
+	_ = m["1"]
+}
+
+// TestBigBatchGCDuration 测试大规模数据gc时长
+func TestBigBatchGCDuration(t *testing.T) {
+	size := 5000000
+	m := GenerateStringMap(size)
+	runtime.GC()
+	gcCost := timeGC()
+	t.Logf("size %d GC duration: %v\n", size, gcCost)
+	_ = m["1"]
+}
+
+func timeGC() time.Duration {
+	// 记录GC开始时间
+	gcStartTime := time.Now()
+	// 手动触发GC，以便更准确地测量此次操作相关的GC时长
+	runtime.GC()
+	// 计算总的GC时长
+	gcCost := time.Since(gcStartTime)
+	return gcCost
+}
+
+```
+
+测试结果出来了，map 中储存 1k 条数据和 500w 条数据的 GC 耗时差异巨大。500w 条数据，GC 耗时 85ms，而 1k 条数据耗时
+只需要 442µs，有近200 倍的性能差异。
+
+```shell
+ go test -gcflags=all=-l mp_gc_optimize_test.go -v
+=== RUN   TestSmallBatchGCDuration
+    mp_gc_optimize_test.go:29: size 1000 GC duration: 441.882µs
+--- PASS: TestSmallBatchGCDuration (0.00s)
+=== RUN   TestBigBatchGCDuration
+    mp_gc_optimize_test.go:39: size 5000000 GC duration: 85.211619ms
+--- PASS: TestBigBatchGCDuration (4.71s)
+PASS
+ok      command-line-arguments  5.459s
+```
+
+那么在大规模数据缓存下，GC 为什么耗时会这么长呢？这是因为 GC 在做对象扫描标记时，需要扫描标记 map 里面的全量 key-value 对象，
+数据越多，需要扫描的对象越多，GC 时间也就越长。扫描标记的耗时过长，会引发一系列不良影响。它不仅会大量消耗 CPU 资源，
+降低服务吞吐，而且在标记工作未能及时完成的情况下，GC 会要求处理请求的协程暂停手头的业务逻辑处理流程，转而协助 GC 
+开展标记任务。这样一来，部分请求的响应延时将会不可避免地大幅升高，严重影响系统的响应效率与性能表现。为了避免 GC 
+对程序性能造成影响，对于 map 类型，Golang 在 1.5 版本(https://go-review.googlesource.com/c/go/+/3288)
+提供了一种绕过 GC 扫描的方法。绕过 GC 要满足下面两个条件。
+
+> 第一，map 的 key-value 类型不能是指针类型且内部不能包含指针。比如 string 类型，它的底层数据结构中有指向数组的指针，
+因此不满足这个条件。
+
+```go
+// 字符串数据结构
+type stringStruct struct {
+    str unsafe.Pointer //指针类型，指向字节数组
+    len int
 }
 ```
 
-
-
-
-二、系统设计
-
-可以使用UML图或线框图辅助表达设计
-
-**可靠性要求**
-
-考虑到排行榜系统需要 7*24 小时运行，且需要确保数据的一致性和完整性，请说明你会如何设计系统来满足可靠性要求。
-
-**性能要求**
-
-考虑到排行榜系统需要实时查询和更新，且总玩家数量可达到百万级，请说明你会如何设计系统来满足性能要求。
-
-
-
-三、游戏需求更改（选做）
-
-假如游戏设计师想让获得相同成绩的玩家享有同等的荣誉，所以计划调整为采用"密集排名"的计算方式，请说明你会如何修改实现来满足新的游戏需求。
-
-新的排名规则如下：
-
-1.分数依旧从高到低排序。
-
-2.对于分数相同的玩家，将获得完全相同的排名位次。
-
-3.当出现新的不同分数时，该玩家的排名将在上一个排名基础上递增 1 位。
-
-举例说明：
-
-Plain Text
-- 玩家A：100分 → 排名第1
-- 玩家B：100分 → 排名第1
-- 玩家C：95分  → 排名第2
-- 玩家D：95分  → 排名第2
-- 玩家E：90分  → 排名第3
-
-
-我建议使用redis的分片集群(比如codis或官方的redis cluster)来分担高并发请求压力，单个redis实例可以扛住大概10万并发(每秒)，按照最高标准，
-100万用户每秒就是100万并发，所以我们可以使用10个节点组成redis分片集群来存储数据以及应对读写请求，RDB+AOF混合持久化策略确保不丢数据，
-主从同步和哨兵集群实现自动故障转移，这些注意确保redis服务的高可用。使用zset有序集合处理这种排行榜问题最为合适，但是存在以下几个问题，
-首先，每个分片存储约10万玩家数据，并使用zset进行存储，zadd leaderboard score playerId，这是否会有大key的问题，redis是用单线程
-来处理数据读写请求的，大key请求会阻塞主线程，影响性能；第二，每个分片存储约10万玩家数据，而需求是获取玩家的全局排名，每个分片只能获取
-到该分片上的局部排名(10万条数据中的排名)，难不成要从10个分片获取所有玩家数据到本地进行统一排名，这样计算量可就大了，肯定耗时长；
-第三，如果想使用ziplist编码存储小对象，可是有序集合zset只有在集合元素数量少(默认阈值是512个)或集合中单个元素占用内存比较小的情况才会
-使用ziplist存储，否则会使用跳表skiplist。请你在我的代码基础上进一步完善，解决我提到的这几个问题，请给出具体的go代码实现，不要泛泛而谈。
-
-
-以下是我的代码实现思路
+那到底不含指针类型，能不能缩短 GC 开销呢？咱们将代码里 map 的 key-value 类型换成 int 类型再试一下。
 
 ```go
-package main
+func GenerateIntMap(size int) map[int]int {
+	// 在这里执行一些可能会触发GC的操作，例如创建大量对象等
+	// 以下示例创建一个较大的map并填充数据
+	m := make(map[int]int)
+	for i := 0; i < size; i++ {
+		m[i] = i
 
+	}
+	return m
+}
+
+// 测试key-value非指针类型,int的gc开销
+func TestBigBatchIntGCDuration(t *testing.T) {
+	size := 5000000
+	m := GenerateIntMap(size)
+	runtime.GC()
+	gcCost := timeGC()
+	t.Logf("size %d GC duration: %v\n", size, gcCost)
+	_ = m[1]
+}
+```
+
+你会发现，key-value 换成 int 类型的 map，gc 性能提升非常明显，gc 时间从 85ms 变成了 不到2ms，提升42倍。
+
+```shell
+go test -gcflags=all=-l -run TestBigBatchIntGCDuration -v
+=== RUN   TestBigBatchIntGCDuration
+    mp_gc_optimize_test.go:60: size 5000000 GC duration: 1.926306ms
+--- PASS: TestBigBatchIntGCDuration (1.24s)
+PASS
+ok      go-notes/go-principle-and-practise/map/optimizegc      1.810s
+```
+
+> 第二，key-value 除了需要满足非指针这个条件，key/value 的大小也不能超过 128 字节，如果超过 128 字节，
+key-value 就会退化成指针，导致被 GC 扫描。
+
+我们用 value 大小分别是 128、129 字节的结构体测试一下，测试代码如下。
+
+```go
+func TestSmallStruct(t *testing.T) {
+	type SmallStruct struct {
+		data [128]byte
+	}
+	m := make(map[int]SmallStruct)
+	size := 5000000
+	for i := 0; i < size; i++ {
+		m[i] = SmallStruct{}
+	}
+	runtime.GC()
+	gcCost := timeGC()
+	t.Logf("size %d GC duration: %v\n", size, gcCost)
+	_ = m[1]
+}
+func TestBigStruct(t *testing.T) {
+	type BigStruct struct {
+		data [129]byte
+	}
+	m := make(map[int]BigStruct)
+	size := 5000000
+	for i := 0; i < size; i++ {
+		m[i] = BigStruct{}
+	}
+	runtime.GC()
+	gcCost := timeGC()
+	t.Logf("size %d GC duration: %v\n", size, gcCost)
+	_ = m[1]
+}
+```
+
+果然，key-value 的大小超过 128 字节会导致 GC 性能开销变大。对于 129 字节的结构体，GC 耗时 129ms，而 128 字节，
+只需要 4.55ms，性能差距高达近30倍。
+
+```shell
+go test -gcflags=all=-l -run "TestSmallStruct|TestBigStruct" -v
+=== RUN   TestSmallStruct
+    mp_gc_optimize_test.go:75: size 5000000 GC duration: 4.552182ms
+--- PASS: TestSmallStruct (2.57s)
+=== RUN   TestBigStruct
+    mp_gc_optimize_test.go:89: size 5000000 GC duration: 129.120292ms
+--- PASS: TestBigStruct (2.17s)
+PASS
+ok      go-notes/go-principle-and-practise/map/optimizegc      5.522s
+
+```
+
+通过前面的测试，我们知道了，在缓存大规模数据时，为了避免 GC 开销，key-value 不能含指针类型且 key-value 的大小不能超过
+128 字节。实际上，咱们在缓存大规模数据时，可以使用成熟的开源库来实现，比如 bigcache、freecache 等。它们的底层就是使用
+分段锁加 map 类型来实现数据存储的，同时，它们也利用了刚刚讲过的 map 的 key-value 特性，来避免 GC 扫描。
+
+以bigcache 为例，它的使用比较简单。通过 Get 和 Set 方法就可以实现读写操作。
+
+```go
 import (
-	"github.com/go-redis/redis/v8"
+     "fmt""context""github.com/allegro/bigcache/v3"
 )
 
-type LeaderboardService interface {
-	UpdateScore(playerId string, score int, timestamp int)
-	GetPlayerRank(playerId string) int
-	GetTopN(n int) []RankInfo
-	GetPlayerRankRange(playerId string, r int) []RankInfo
-}
+cache, _ := bigcache.New(context.Background(), bigcache.DefaultConfig(10 * time.Minute))
 
-type RedisLeaderboard struct {
-	client *redis.Client
-}
+cache.Set("my-unique-key", []byte("value"))
 
-type RankInfo struct {
-	PlayerID string
-	Score    int
-	Rank     int
-}
-
-// 用组合分数保证排序规则：主分数 + 时间戳反序
-func (r *RedisLeaderboard) UpdateScore(playerId string, score int, timestamp int) {
-	// 将时间戳转换为补数用于排序
-	combinedScore := float64(score) + (1 - float64(timestamp)/1e12)
-	r.client.ZAdd(ctx, "leaderboard", &redis.Z{
-		Score:  combinedScore,
-		Member: playerId,
-	})
-}
-
-func (r *RedisLeaderboard) GetPlayerRank(playerId string) int {
-	rank, _ := r.client.ZRevRank(ctx, "leaderboard", playerId).Result()
-	return int(rank) + 1 // Redis从0开始
-}
-
-func (r *RedisLeaderboard) GetTopN(n int) []RankInfo {
-	res, _ := r.client.ZRevRangeWithScores(ctx, "leaderboard", 0, int64(n-1)).Result()
-	return parseResult(res)
-}
-
-func (r *RedisLeaderboard) GetPlayerRankRange(playerId string, r int) []RankInfo {
-	rank := r.GetPlayerRank(playerId)
-	start := max(0, rank-1-r)
-	res, _ := r.client.ZRevRangeWithScores(ctx, "leaderboard", start, start+2*r).Result()
-	return parseResult(res)
-}
-
-
-// 修改后的排名计算方法
-func (r *RedisLeaderboard) GetDenseRank(playerId string) int {
-	score, _ := r.client.ZScore(ctx, "leaderboard", playerId).Result()
-	// 获取大于当前分数的元素个数即为排名
-	count, _ := r.client.ZCount(ctx, "leaderboard",
-		fmt.Sprintf("(%f", score), "+inf").Result()
-	return int(count) + 1
-}
+entry, _ := cache.Get("my-unique-key")
+fmt.Println(string(entry))
 ```
