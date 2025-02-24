@@ -22,28 +22,28 @@ type Sender interface {
 
 // senderRegistry 存储不同场景对应的工厂函数
 var (
-	senderRegistry = make(map[int]func() Sender)
+	senderRegistry = make(map[int]Sender)
 	once           sync.Once
 )
 
 // RegisterSender 将具体的发送器注册到工厂中
-func RegisterSender(scene int, factory func() Sender) {
+func RegisterSender(scene int, s Sender) {
 	once.Do(func() {
-		senderRegistry = make(map[int]func() Sender)
+		senderRegistry = make(map[int]Sender)
 	})
 	if _, exists := senderRegistry[scene]; exists {
 		panic(fmt.Sprintf("Scene %d already registered", scene))
 	}
-	senderRegistry[scene] = factory
+	senderRegistry[scene] = s
 }
 
 // NewSendMessageService 根据场景创建对应的发送器
 func NewSendMessageService(scene int) (Sender, error) {
-	factory, ok := senderRegistry[scene]
+	sender, ok := senderRegistry[scene]
 	if !ok {
 		return nil, fmt.Errorf("unsupported scene: %d", scene)
 	}
-	return factory(), nil
+	return sender, nil
 }
 
 // DingDing 实现发送消息的具体发送器
@@ -72,9 +72,9 @@ func (w *Feishu) Send(message string) error {
 
 // 初始化函数，注册所有默认的发送器
 func init() {
-	RegisterSender(1, func() Sender { return new(DingDing) })
-	RegisterSender(2, func() Sender { return new(Weixin) })
-	RegisterSender(3, func() Sender { return new(Feishu) })
+	RegisterSender(1, new(DingDing))
+	RegisterSender(2, new(Weixin))
+	RegisterSender(3, new(Feishu))
 	// 如果要增加新地发送消息类型，只需要将其注册到senderRegistry中即可
 }
 
