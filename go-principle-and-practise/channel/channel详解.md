@@ -266,6 +266,48 @@ Channel可能会引发 goroutine 泄漏。
 另外，程序运行过程中，对于一个 channel，如果没有任何 goroutine 引用了，即便是它没有被关闭掉，gc 也会对其进行回收操作，
 不会引起内存泄漏。
 
+在构建超时返回机制时，我们应采用非阻塞型 channel
+
+以下面这段典型的、借助阻塞型  channel  实现超时返回机制的函数代码为例。
+
+```go
+func handle(timeout time.Duration) *Obj {
+    ch := make(chan *Obj)
+    go func() {
+        result := fn() // 逻辑处理
+        ch <- result   // block
+    }()
+    select {
+    case result := <-ch:
+        return result
+    case <-time.After(timeout):
+        return nil
+    }
+}
+```
+
+当第 4 行在协程内执行的函数耗时较长，使得 handle 函数超时返回时，会导致阻塞型通道变量 ch 没有了接收者。这样一来，
+第 5 行向通道写入数据的操作就会永远处于阻塞状态，最终引发协程泄漏问题。因此，为有效规避这一问题，在构建超时返回机制时，
+我们应采用非阻塞型 channel，具体实现可参考后面的代码。
+
+```go
+func handle(timeout time.Duration) *Obj {
+    //ch := make(chan *Obj)
+    ch := make(chan *Obj, 1) // 使用非阻塞型channel
+    go func() {
+        result := fn() // 逻辑处理
+        ch <- result   // block
+    }()
+    select {
+    case result := <-ch:
+        return result
+    case <-time.After(timeout):
+        return nil
+    }
+}
+```
+
+
 # 6 管道有哪些常用的应用场景?
 
 ## 6.1 停止信号

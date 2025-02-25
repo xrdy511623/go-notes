@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 const (
 	bit0, mask0 = 1 << iota, 1<<iota - 1
