@@ -1,0 +1,174 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>unit-test: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">go-notes/go-principle-and-practise/unit-test/max_online_time.go (100.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package unittest
+
+import "sort"
+
+type userOnLine struct {
+        uid        int64
+        loginTime  int64
+        logoutTime int64
+}
+
+// event 表示一个事件：时间和 delta（+1 表示登录，-1 表示登出）
+type event struct {
+        t     int64
+        delta int
+}
+
+/*
+统计活动在线人数在一天的什么时候达到峰值，如果有多个时刻达到峰值，输出第一个.
+这里用户的登录和登出时间都是秒(相对于当天0时0分0秒过去了多少秒，在0-3600x24之间)
+统计在哪个时刻(相对于当天0时0分0秒过去了多少秒)在线人数达到了峰值。
+现在你已经有了这一天用户的登录和登出时间全量数据，设计一个算法来实现这个需求，
+要求尽可能的高效。
+*/
+
+func getMaxOnlineTime(users []*userOnLine) int64 <span class="cov8" title="1">{
+        n := len(users)
+        // 构建事件数组
+        events := make([]event, 0, 2*n)
+        for i := 0; i &lt; n; i++ </span><span class="cov8" title="1">{
+                events = append(events, event{
+                        t:     users[i].loginTime,
+                        delta: 1,
+                })
+                events = append(events, event{
+                        t:     users[i].logoutTime,
+                        delta: -1,
+                })
+        }</span>
+        // 对事件按时间升序排序，如果时间相同，则登录事件（+1）排前面
+        <span class="cov8" title="1">sort.Slice(events, func(i, j int) bool </span><span class="cov8" title="1">{
+                if events[i].t == events[j].t </span><span class="cov8" title="1">{
+                        return events[i].delta &gt; events[j].delta
+                }</span>
+                <span class="cov8" title="1">return events[i].t &lt; events[j].t</span>
+        })
+        // 初始化当前在线人数
+        <span class="cov8" title="1">currentOnline := 0
+        // 初始化历史最大在线人数
+        maxOnline := 0
+        // 初始化峰值时间
+        var peakTime int64
+        i := 0
+        for i &lt; n*2 </span><span class="cov8" title="1">{
+                // 为了处理多个事件在同一时刻发生，采用按时间分组累计 delta 的方法
+                currentTime := events[i].t
+                deltaSum := 0
+                // 将所有在 currentTime 时刻的事件累加起来
+                for i &lt; n*2 &amp;&amp; events[i].t == currentTime </span><span class="cov8" title="1">{
+                        deltaSum += events[i].delta
+                        i++
+                }</span>
+                // 更新当前在线人数
+                <span class="cov8" title="1">currentOnline += deltaSum
+                // 只有当当前在线人数严格大于历史最大在线人数时，更新最大在线人数和对应的峰值时间
+                if currentOnline &gt; maxOnline </span><span class="cov8" title="1">{
+                        maxOnline = currentOnline
+                        peakTime = currentTime
+                }</span>
+        }
+        <span class="cov8" title="1">return peakTime</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
