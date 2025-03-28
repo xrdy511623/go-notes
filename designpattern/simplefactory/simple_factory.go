@@ -4,6 +4,13 @@ import (
 	"fmt"
 )
 
+const (
+	unKnownScene = iota
+	dingdingScene
+	weixinScene
+	feishuScene
+)
+
 /*
 依赖反转原则
 所谓依赖反转，是指高层模块不应该直接依赖于低层模块的具体实现，两者都应该依赖于接口。这样当低层模块需要
@@ -43,13 +50,13 @@ func (w *Feishu) Send(message string) error {
 func NewSendMessageService(scene int) Sender {
 	var impl Sender
 	switch scene {
-	case 1:
+	case dingdingScene:
 		// 使用钉钉发送消息
 		impl = new(DingDing)
-	case 2:
+	case weixinScene:
 		// 使用微信发送消息
 		impl = new(Weixin)
-	case 3:
+	case feishuScene:
 		// 使用飞书发送消息
 		impl = new(Feishu)
 	default:

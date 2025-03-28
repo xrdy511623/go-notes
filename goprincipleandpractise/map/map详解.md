@@ -795,7 +795,7 @@ go test -gcflags=all=-l -run TestBigBatchIntGCDuration -v
     mp_gc_optimize_test.go:60: size 5000000 GC duration: 1.926306ms
 --- PASS: TestBigBatchIntGCDuration (1.24s)
 PASS
-ok      go-notes/go-principle-and-practise/map/optimizegc      1.810s
+ok      go-notes/goprincipleandpractise/map/optimizegc      1.810s
 ```
 
 > 第二，key-value 除了需要满足非指针这个条件，key/value 的大小也不能超过 128 字节，如果超过 128 字节，
@@ -846,7 +846,7 @@ go test -gcflags=all=-l -run "TestSmallStruct|TestBigStruct" -v
     mp_gc_optimize_test.go:89: size 5000000 GC duration: 129.120292ms
 --- PASS: TestBigStruct (2.17s)
 PASS
-ok      go-notes/go-principle-and-practise/map/optimizegc      5.522s
+ok      go-notes/goprincipleandpractise/map/optimizegc      5.522s
 ```
 
 通过前面的测试，我们知道了，在缓存大规模数据时，为了避免 GC 开销，key-value 不能含指针类型且 key-value 的大小不能超过

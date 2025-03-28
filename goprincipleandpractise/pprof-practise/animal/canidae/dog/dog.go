@@ -1,7 +1,7 @@
 package dog
 
 import (
-	"go-notes/go-principle-and-practise/pprof-practise/constant"
+	"go-notes/goprincipleandpractise/pprof-practise/constant"
 	"log"
 )
 
