@@ -16,6 +16,12 @@ func modifyOne(s []int) {
 	fmt.Printf("s in modifyOne is:%v\n", s)
 }
 
+func modifyArray(arr [3]int) {
+	arr[0] = 1024
+	// []int{1024, 1, 2}
+	fmt.Printf("arr in modifyOne is:%v\n", arr)
+}
+
 func modifyTwo(s []int) {
 	s = append(s, 2048)
 	s[0] = 1024
@@ -81,6 +87,11 @@ func main() {
 	modifyOne(s1)
 	// []int{1024, 1, 2}
 	fmt.Println(s1)
+
+	array := [3]int{1, 2, 3}
+	modifyArray(array)
+	// [3]int{1,2,3}
+	fmt.Println(array)
 
 	s2 := generateSlice()
 	modifyTwo(s2)

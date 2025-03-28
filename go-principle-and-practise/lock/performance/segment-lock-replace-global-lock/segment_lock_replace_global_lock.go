@@ -82,7 +82,7 @@ func (m SegmentMap) Get(key string) (value string) {
 	return
 }
 
-// Count 统计当前分段map中item(键值对)的个数
+// Count 统计分段map中所有item(键值对)的个数
 func (m SegmentMap) Count() int {
 	count := 0
 	for i := 0; i < ShardCount; i++ {

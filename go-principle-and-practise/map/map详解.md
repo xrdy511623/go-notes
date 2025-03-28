@@ -847,7 +847,6 @@ go test -gcflags=all=-l -run "TestSmallStruct|TestBigStruct" -v
 --- PASS: TestBigStruct (2.17s)
 PASS
 ok      go-notes/go-principle-and-practise/map/optimizegc      5.522s
-
 ```
 
 通过前面的测试，我们知道了，在缓存大规模数据时，为了避免 GC 开销，key-value 不能含指针类型且 key-value 的大小不能超过
@@ -858,13 +857,12 @@ ok      go-notes/go-principle-and-practise/map/optimizegc      5.522s
 
 ```go
 import (
-     "fmt""context""github.com/allegro/bigcache/v3"
+     "fmt"
+	 "context""github.com/allegro/bigcache/v3"
 )
 
 cache, _ := bigcache.New(context.Background(), bigcache.DefaultConfig(10 * time.Minute))
-
 cache.Set("my-unique-key", []byte("value"))
-
 entry, _ := cache.Get("my-unique-key")
 fmt.Println(string(entry))
 ```
