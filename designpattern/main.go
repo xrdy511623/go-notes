@@ -2,10 +2,14 @@ package main
 
 import (
 	"fmt"
-	"go-notes/designpattern/observer"
-	"go-notes/designpattern/registerfactory"
-	"go-notes/designpattern/simplefactory"
 	"time"
+
+	"go-notes/designpattern/observer"
+	_ "go-notes/designpattern/registerfactory/dingding"
+	_ "go-notes/designpattern/registerfactory/feishu"
+	"go-notes/designpattern/registerfactory/sender"
+	_ "go-notes/designpattern/registerfactory/weixin"
+	"go-notes/designpattern/simplefactory"
 )
 
 func main() {
@@ -14,11 +18,10 @@ func main() {
 	if err != nil {
 		fmt.Printf("simplefactory.SendMessage err:%v\n", err)
 	}
-	e := registerfactory.SendMessage(3, "注册模式")
-	if e != nil {
-		fmt.Printf("registerfactory.SendMessage err:%v\n", e)
+	s, _ := sender.Get("dingding")
+	if err := s.Send("Hello"); err != nil {
+		fmt.Printf("registerfactory.SendMessage err:%v\n", err)
 	}
-
 	// 使用观察者模式
 	pub := observer.NewPublisher()
 	sub1 := pub.Subscribe(1, 100)

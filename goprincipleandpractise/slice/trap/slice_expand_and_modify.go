@@ -68,7 +68,7 @@ func SliceRiseTwo(s []int) {
 	}
 }
 
-// 	VerifySliceExpand 切片扩容策略
+// VerifySliceExpand 切片扩容策略
 func VerifySliceExpand() {
 	s := make([]int, 0)
 	oldCap := cap(s)

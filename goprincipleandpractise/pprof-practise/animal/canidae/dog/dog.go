@@ -1,8 +1,9 @@
 package dog
 
 import (
-	"go-notes/goprincipleandpractise/pprof-practise/constant"
 	"log"
+
+	"go-notes/goprincipleandpractise/pprof-practise/constant"
 )
 
 type Dog struct {

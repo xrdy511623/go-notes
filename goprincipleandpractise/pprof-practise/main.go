@@ -1,13 +1,14 @@
 package main
 
 import (
-	"go-notes/goprincipleandpractise/pprof-practise/animal"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"time"
+
+	"go-notes/goprincipleandpractise/pprof-practise/animal"
 )
 
 func main() {
