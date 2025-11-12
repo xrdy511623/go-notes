@@ -101,7 +101,7 @@ func timeGC() time.Duration {
 	gcStartTime := time.Now()
 	// 手动触发GC，以便更准确地测量此次操作相关的GC时长
 	runtime.GC()
-	// 计算总的GC时长
+	// 计算总的GC时长s
 	gcCost := time.Since(gcStartTime)
 	return gcCost
 }
