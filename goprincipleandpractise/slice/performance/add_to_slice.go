@@ -15,6 +15,10 @@ import (
 所以我们得出结论:
 对切片预先分配内存可以提升性能;
 直接使用index下表索引赋值而非append添加数据可以提升性能。
+
+BenchmarkAppendLoop-10          1000000000               0.6290 ns/op          6 B/op          0 allocs/op
+BenchmarkAppendSpread-10        1000000000               0.1634 ns/op          1 B/op          0 allocs/op
+如果不需要过滤切片，直接将一个切片里的元素全部拷贝到另一个切片里，可以使用 ... 展开，性能更优。
 */
 
 func Append(num int) {
@@ -41,6 +45,37 @@ func AppendIndexed(num int) {
 		for j := 0; j < 10000; j++ {
 			s[j] = j
 		}
+	}
+}
+
+func AppendLoop(num int) {
+	autoFields := make([]string, num)
+	for i := range autoFields {
+		autoFields[i] = "field"
+	}
+
+	for i := 0; i < num; i++ {
+		setParts := []string{}
+		for _, f := range autoFields {
+			setParts = append(setParts, f)
+		}
+		// 防止编译器优化
+		_ = setParts
+	}
+}
+
+func AppendSpread(num int) {
+	autoFields := make([]string, num)
+	for i := range autoFields {
+		autoFields[i] = "field"
+	}
+
+	for i := 0; i < num; i++ {
+		setParts := []string{}
+		// 使用 ... 展开
+		setParts = append(setParts, autoFields...)
+		// 防止编译器优化
+		_ = setParts
 	}
 }
 
