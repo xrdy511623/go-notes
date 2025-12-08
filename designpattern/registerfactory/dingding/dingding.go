@@ -14,5 +14,5 @@ func (d *DingDing) Send(message string) error {
 }
 
 func init() {
-	sender.Register("dingding", func() sender.Sender { return &DingDing{} })
+	sender.Register("dingding", &DingDing{})
 }

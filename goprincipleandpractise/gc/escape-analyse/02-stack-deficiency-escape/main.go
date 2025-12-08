@@ -28,7 +28,7 @@ func newItemPointerSlice(n int) []*Item {
 }
 
 func MakeSlice() {
-	s := make([]int, 10000, 10000)
+	s := make([]int, 0, 10000)
 	for i := range s {
 		s[i] = i
 	}
@@ -36,6 +36,11 @@ func MakeSlice() {
 
 func main() {
 	MakeSlice()
-	newItemValueSlice(10000)
-	newItemPointerSlice(10000)
+	//newItemValueSlice(10000)
+	//newItemPointerSlice(10000)
+	n := 100
+	s := make([]int, n)
+	for i := 0; i < n; i++ {
+		s[i] = i + 1
+	}
 }

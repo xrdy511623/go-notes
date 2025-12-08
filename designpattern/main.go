@@ -9,15 +9,14 @@ import (
 	_ "go-notes/designpattern/registerfactory/feishu"
 	"go-notes/designpattern/registerfactory/sender"
 	_ "go-notes/designpattern/registerfactory/weixin"
-	"go-notes/designpattern/simplefactory"
 )
 
 func main() {
 	// 使用简单工厂和策略模式来发送消息
-	err := simplefactory.SendMessage(3, "简单工厂和策略模式")
-	if err != nil {
-		fmt.Printf("simplefactory.SendMessage err:%v\n", err)
-	}
+	//err := simplefactory.SendMessage(3, "简单工厂和策略模式")
+	//if err != nil {
+	//	fmt.Printf("simplefactory.SendMessage err:%v\n", err)
+	//}
 	s, _ := sender.Get("dingding")
 	if err := s.Send("Hello"); err != nil {
 		fmt.Printf("registerfactory.SendMessage err:%v\n", err)

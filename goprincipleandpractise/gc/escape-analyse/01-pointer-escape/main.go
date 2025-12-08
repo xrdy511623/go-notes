@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type StudentDetail struct {
 	Name string
 	Age  int
@@ -13,5 +15,6 @@ func RegisterStudent(name string, age int) *StudentDetail {
 }
 
 func main() {
-	RegisterStudent("Jim", 18)
+	student := RegisterStudent("Jim", 18)
+	fmt.Println(student.Name, student.Age)
 }

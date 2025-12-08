@@ -14,5 +14,5 @@ func (f *FeiShu) Send(message string) error {
 }
 
 func init() {
-	sender.Register("feishu", func() sender.Sender { return &FeiShu{} })
+	sender.Register("feishu", &FeiShu{})
 }

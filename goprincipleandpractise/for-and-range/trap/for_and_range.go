@@ -12,7 +12,7 @@ func main() {
 	for _, s := range persons {
 		s.age += 10
 	}
-
+	fmt.Printf("persons are: %+v\n", persons)
 	for i, n := 0, len(persons); i < n; i++ {
 		persons[i].age += 20
 	}
@@ -50,7 +50,7 @@ func main() {
 		的数据是切片的拷贝数据，所以是直接copy了结构体数据。
 	*/
 	for _, v := range n {
-		fmt.Println(*v)
+		fmt.Println(v)
 	}
 	for k, v := range m {
 		fmt.Println(k, v)

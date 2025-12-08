@@ -12,13 +12,13 @@ type Sender interface {
 type Factory func() Sender
 
 var (
-	registry = make(map[string]Factory)
+	registry = make(map[string]Sender)
 	mu       sync.RWMutex // 读写锁
 )
 
 // Register 注册工厂函数(写操作)
-func Register(name string, factory Factory) {
-	if name == "" || factory == nil {
+func Register(name string, s Sender) {
+	if name == "" || s == nil {
 		fmt.Println("invalid register: name or factory is nil")
 		return
 	}
@@ -28,19 +28,19 @@ func Register(name string, factory Factory) {
 	if _, exists := registry[name]; exists {
 		panic(fmt.Sprintf("sender %s already registered", name))
 	}
-	registry[name] = factory
+	registry[name] = s
 }
 
 // New 创建新实例(读操作)
 func New(name string) (Sender, error) {
 	mu.RLock()
-	factory, ok := registry[name]
+	s, ok := registry[name]
 	mu.RUnlock()
 
 	if !ok {
 		return nil, fmt.Errorf("sender %s not found", name)
 	}
-	return factory(), nil
+	return s, nil
 }
 
 // List 列出所有已注册的发送器(读操作)
@@ -59,7 +59,7 @@ func Get(name string) (Sender, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if s, ok := registry[name]; ok {
-		return s(), nil
+		return s, nil
 	}
 	return nil, fmt.Errorf("sender not found: %s", name)
 }

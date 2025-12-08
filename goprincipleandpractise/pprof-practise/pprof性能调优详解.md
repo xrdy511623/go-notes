@@ -57,7 +57,7 @@ profile表示采样的是CPU指标，seconds=10代表采样时长为10s。
 
 
 
-使用top工具查看暂用CPU资源最多的函数，定位到*Tiger的Eat函数
+使用top工具查看占用CPU资源最多的函数，定位到*Tiger的Eat函数
 
 下面对top工具的输出做一简要说明:
 flat 当前函数本身的执行耗时
