@@ -179,6 +179,69 @@ ok      example 6.597s
 ```
 通过测试结果可以发现，输入变为原来的 10 倍，函数每次调用的时长也差不多是原来的 10 倍，这说明复杂度是线性的。
 
+
+# 2.4 比较两次运行结果
+benchstat 是 Go 官方性能工具，用来比较两次基准测试（benchmark）结果的统计差异，可自动计算：
+
+平均值（mean）
+中位数
+标准差
+ns/op、B/op、allocs/op 的变化比例
+
+非常适合以下场景：
+✔ 优化代码后想验证是否真的变快
+✔ 对比不同算法版本
+✔ 调整 GC、参数后验证效果
+✔ 分析锁竞争、内存分配变化
+
+**安装**
+
+```shell
+go install golang.org/x/perf/cmd/benchstat@latest
+```
+
+**使用**
+
+运行第一次基准测试（baseline）
+
+```shell
+go test -bench=. -benchmem -count=10 > old.txt
+```
+
+修改代码后运行第二次基准测试（new version）
+
+```shell
+go test -bench=. -benchmem -count=10 > old.txt
+```
+
+用 benchstat 对比两个结果
+
+```shell
+benchstat old.txt new.txt
+```
+
+输出结果如下：
+
+```shell
+ benchstat old.txt new.txt
+goos: darwin
+goarch: arm64
+pkg: go-notes/goprincipleandpractise/slice/performance
+cpu: Apple M4
+          │        old.txt        │                new.txt                │
+          │        sec/op         │    sec/op     vs base                 │
+Append-10   2110301604.0000n ± 2%   0.5722n ± 6%  -100.00% (p=0.000 n=10)
+
+          │       old.txt        │               new.txt               │
+          │         B/op         │    B/op     vs base                 │
+Append-10   35762721200.000 ± 0%   8.000 ± 0%  -100.00% (p=0.000 n=10)
+
+          │   old.txt   │               new.txt                │
+          │  allocs/op  │  allocs/op   vs base                 │
+Append-10   1.902M ± 0%   0.000M ± 0%  -100.00% (p=0.000 n=10)
+```
+
+
 # 3 benchmark 注意事项
 
 ## 3.1 ResetTimer
