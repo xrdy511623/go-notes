@@ -6,13 +6,13 @@ git 命令，尤其是比较长的命令使用起来不太方便，拼写也容�
 使用git命令的别名来提高效率。
 
 ```shell
-git config --global alias.st status
-git config --global alias.ch checkout
-git config --global alias.cm commit
-git config --global alias.ad add
-git config --global alias.br branch
-git config --global alias.unstage 'reset HEAD'
-git config --global alias.cp cherry-pick
+git model --global alias.st status
+git model --global alias.ch checkout
+git model --global alias.cm commit
+git model --global alias.ad add
+git model --global alias.br branch
+git model --global alias.unstage 'reset HEAD'
+git model --global alias.cp cherry-pick
 ```
 可以通过~/.gitconfig文件查看配置是否成功
 

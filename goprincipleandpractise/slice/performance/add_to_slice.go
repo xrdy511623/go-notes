@@ -1,54 +1,59 @@
 package performance
 
-import (
-	"fmt"
-)
-
 /*
-测试结果参考images目录下的slice-performance.png
+测试结果参考 images 目录下的 slice-performance.png。
 
-通过benchMark性能对比测试，可以发现从上到下，性能是越来越好，每次操作需要分配的内存空间以及内存分配次数都有了大幅下降。
-原因在于通过append的方式向切片添加数据，由于不确定切片后续的长度和容量能到多少，所以一直需要不断的扩容和分配内存，反之，如果
-一开始就用make函数初始化slice,明确切片的容量，预先分配内存，那么就可以避免后续添加数据时频繁的扩容和分配内存，大幅提高
-性能，而第三个按索引下标赋值的方式，相比于append添加数据显然性能更优，那是因为append会有额外的开销。
+通过 benchmark 对比可以看到，从 Append -> AppendAllocated -> AppendIndexed，
+单次操作分配次数和内存占用通常会下降。
+原因是预分配可以减少扩容次数，而在长度已知时直接下标赋值可以减少 append 的额外开销。
 
-所以我们得出结论:
-对切片预先分配内存可以提升性能;
-直接使用index下表索引赋值而非append添加数据可以提升性能。
+前提：
+1. 对切片预先分配内存通常可以提升性能；
+2. 最终长度已知且无需过滤时，index 赋值通常优于 append。
 
 BenchmarkAppendLoop-10          1000000000               0.6290 ns/op          6 B/op          0 allocs/op
 BenchmarkAppendSpread-10        1000000000               0.1634 ns/op          1 B/op          0 allocs/op
-如果不需要过滤切片，直接将一个切片里的元素全部拷贝到另一个切片里，可以使用 ... 展开，性能更优。
+如果不需要过滤切片，直接将一个切片里的元素全部拷贝到另一个切片里，可以使用 ... 展开，通常更高效。
 */
 
-func Append(num int) {
+func Append(num int) int {
+	totalLen := 0
 	for i := 0; i < num; i++ {
 		s := []int{}
 		for j := 0; j < 10000; j++ {
 			s = append(s, j)
 		}
+		totalLen += len(s)
 	}
+	return totalLen
 }
 
-func AppendAllocated(num int) {
+func AppendAllocated(num int) int {
+	totalLen := 0
 	for i := 0; i < num; i++ {
 		s := make([]int, 0, 10000)
 		for j := 0; j < 10000; j++ {
 			s = append(s, j)
 		}
+		totalLen += len(s)
 	}
+	return totalLen
 }
 
-func AppendIndexed(num int) {
+func AppendIndexed(num int) int {
+	totalLen := 0
 	for i := 0; i < num; i++ {
 		s := make([]int, 10000)
 		for j := 0; j < 10000; j++ {
 			s[j] = j
 		}
+		totalLen += len(s)
 	}
+	return totalLen
 }
 
-func AppendLoop(num int) {
+func AppendLoop(num int) int {
+	totalLen := 0
 	autoFields := make([]string, num)
 	for i := range autoFields {
 		autoFields[i] = "field"
@@ -59,12 +64,13 @@ func AppendLoop(num int) {
 		for _, f := range autoFields {
 			setParts = append(setParts, f)
 		}
-		// 防止编译器优化
-		_ = setParts
+		totalLen += len(setParts)
 	}
+	return totalLen
 }
 
-func AppendSpread(num int) {
+func AppendSpread(num int) int {
+	totalLen := 0
 	autoFields := make([]string, num)
 	for i := range autoFields {
 		autoFields[i] = "field"
@@ -74,9 +80,9 @@ func AppendSpread(num int) {
 		setParts := []string{}
 		// 使用 ... 展开
 		setParts = append(setParts, autoFields...)
-		// 防止编译器优化
-		_ = setParts
+		totalLen += len(setParts)
 	}
+	return totalLen
 }
 
 func GenerateSlice(n int) []int {
@@ -88,29 +94,30 @@ func GenerateSlice(n int) []int {
 }
 
 /*
-测试结果参考images目录下的slice-bce.png
+测试结果参考 images 目录下的 slice_bce.png。
 
-Bce这种写法明显性能更优(测试案例中性能提升30%)，因为在给i累加值之前，它预先检查了s[n-1]的索引下标是否越界，
-这样，之后每次累加时，就不需要再检查切片的索引下标是否越界了。
+BCE 这类写法在特定场景下可能更优：在循环前先做一次边界检查，编译器可能消除循环内重复的 bounds check。
+是否生效取决于代码形态和编译器优化结果，应以实际 benchmark 为准。
 
-结论: 如果能确定访问到的slice长度，可以先执行一次让编译器去做优化，省去后续每次做索引下标是否越界检查的开销。
+结论：如果能确定访问边界，可尝试 BCE 写法减少边界检查开销。
 */
 
-func Normal(n int) {
+func SumNormal(s []int) int {
 	v := 0
-	s := GenerateSlice(n)
 	for i := range s {
 		v += s[i]
 	}
-	fmt.Println(v)
+	return v
 }
 
-func Bce(n int) {
+func SumBce(s []int) int {
+	if len(s) == 0 {
+		return 0
+	}
 	v := 0
-	s := GenerateSlice(n)
-	_ = s[n-1]
+	_ = s[len(s)-1]
 	for i := range s {
 		v += s[i]
 	}
-	fmt.Println(v)
+	return v
 }

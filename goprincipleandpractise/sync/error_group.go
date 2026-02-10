@@ -10,7 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var urls = []string{"http://www.golang.org/", "http://www.google.com/", "http://www.somestupidname.com/"}
+var urls = []string{"http://www.sostupidname.com/", "http://www.golang.org/", "http://www.google.com/"}
 
 func LimitGNum() {
 	results := make(chan string, len(urls))
@@ -19,15 +19,20 @@ func LimitGNum() {
 	// 用WithContext函数创建Group对象
 	eg, ctx := errgroup.WithContext(timeoutCtx)
 	// 调用SetLimit方法，设置可同时运行的最大协程数
-	eg.SetLimit(2)
+	eg.SetLimit(3)
 	for _, url := range urls {
 		url := url
 		// 调用Go方法
 		eg.Go(func() error {
 			// Fetch the URL.
-			resp, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+			req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 			if err != nil {
-				// ✅ 返回错误会导致其他任务取消
+				return err
+			}
+			httpClient := http.Client{}
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				fmt.Printf("Failed to fetch %s\n", url)
 				return err
 			}
 			defer resp.Body.Close()

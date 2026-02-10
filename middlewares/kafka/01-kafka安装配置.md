@@ -22,9 +22,9 @@ Copy到你想要安装的路径下,譬如/usr/local/bin
 运行kafka需要使用Zookeeper，所以你需要先启动Zookeeper，如果你没有Zookeeper，你可以使用kafka自带打包和配置好的Zookeeper。
 
 ```shell
-bin/zookeeper-server-start.sh config/zookeeper.properties
+bin/zookeeper-server-start.sh model/zookeeper.properties
 # output
-[2013-04-22 15:01:37,495] INFO Reading configuration from: config/zookeeper.properties
+[2013-04-22 15:01:37,495] INFO Reading configuration from: model/zookeeper.properties
 (org.apache.zookeeper.server.quorum.QuorumPeerConfig)
 ```
 
@@ -32,7 +32,7 @@ bin/zookeeper-server-start.sh config/zookeeper.properties
 现在启动kafka服务
 
 ```shell
-bin/kafka-server-start.sh config/server.properties
+bin/kafka-server-start.sh model/server.properties
 # output
 [2013-04-22 15:01:47,028] INFO Verifying properties (kafka.utils.VerifiableProperties)
 [2013-04-22 15:01:47,051] INFO Property socket.send.buffer.bytes is overridden to 1048576
@@ -97,8 +97,8 @@ Step 6: 设置多个broker集群
 
 首先为每个broker创建一个配置文件:
 ```shell
-cp config/server.properties config/server-1.properties
-cp config/server.properties config/server-2.properties
+cp model/server.properties model/server-1.properties
+cp model/server.properties model/server-2.properties
 ```
 
 
@@ -128,8 +128,8 @@ broker.id是集群中每个节点的唯一且永久的名称，我们修改端�
 我们已经运行了zookeeper和刚才的一个kafka节点，所有我们只需要再启动2个新的kafka节点。
 
 ```shell
-bin/kafka-server-start.sh config/server-1.properties &
-bin/kafka-server-start.sh config/server-2.properties &
+bin/kafka-server-start.sh model/server-1.properties &
+bin/kafka-server-start.sh model/server-2.properties &
 ```
 
 

@@ -15,28 +15,28 @@ git基础命令详解
 当安装Git后首先要做的事情是设置用户名和邮箱l地址。这是非常重要的，因为每次Git提交都会使用该信息。它被永远的嵌入到了你的提交中：
 
 ```shell
-git config --global user.name "张三"
-git config --global user.email "zangsan@sina.com"
+git model --global user.name "张三"
+git model --global user.email "zangsan@sina.com"
 ```
 
 要针对特定代码仓库生效，则使用--local, 对系统所有用户生效，则使用--system
 ```shell
-git config --local user.name "john adams"
-git config --local user.email "ybzdqhl@gmail.com"
+git model --local user.name "john adams"
+git model --local user.email "ybzdqhl@gmail.com"
 ```
 
 
 ## 1.3 配置比较工具
 另外一个你可能需要配置的有用的选项是缺省的比较工具，它用来解决合并时的冲突。例如，想使用 vimdiff 作为比较工具。
 ```shell
-git config --global merge.tool vimdiff
+git model --global merge.tool vimdiff
 ```
 
 
 ## 1.4 检查配置
 如果想检查你的设置，可以使用 git config --list 命令来列出Git可以在该处找到的所有的设置:
 ```shell
-git config --list
+git model --list
 ```
 
 ## 1.5 添加删除配置项
@@ -44,20 +44,20 @@ git config --list
 添加配置项，使用:
 如果不指定，默认是添加到local配置中。
 ```shell
-git config [--local|--global|--system] --add key value
+git model [--local|--global|--system] --add key value
 ```
 
 删除配置项，使用:
 ```shell
-git config [--local|--global|--system] --unset key
+git model [--local|--global|--system] --unset key
 ```
 
 
 ## 1.6 获取帮助
 ```shell
-git help config
-git config --help
-man git-config
+git help model
+git model --help
+man git-model
 ```
 
 # 2 基础命令说明

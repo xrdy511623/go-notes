@@ -4,14 +4,14 @@ import (
 	"math/rand"
 	"runtime"
 	"testing"
-	"time"
 )
 
-func generateWithCap(cap int) []int {
-	rand.Seed(time.Now().UnixNano())
-	nums := make([]int, 0, cap)
-	for i := 0; i < cap; i++ {
-		nums = append(nums, rand.Int())
+var rng = rand.New(rand.NewSource(1))
+
+func generateWithCap(capacity int) []int {
+	nums := make([]int, 0, capacity)
+	for i := 0; i < capacity; i++ {
+		nums = append(nums, rng.Int())
 	}
 	return nums
 }
@@ -34,7 +34,7 @@ func GetLastByCopy(origin []int) []int {
 }
 
 func testGetLast(t *testing.T, f func([]int) []int) {
-	result := make([][]int, 0)
+	result := make([][]int, 0, 100)
 	for k := 0; k < 100; k++ {
 		origin := generateWithCap(128 * 1024)
 		result = append(result, f(origin))

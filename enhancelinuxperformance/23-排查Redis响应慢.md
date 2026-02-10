@@ -187,7 +187,7 @@ redis-ser 9085 systemd-network    8u     sock    0,9      0t0 15448709 protocol:
 继续在终端一中，运行下面的命令，查询 appendonly 和 appendfsync 的配置：
 
 ```shell
-$ docker exec -it redis redis-cli config get 'append*'
+$ docker exec -it redis redis-cli model get 'append*'
 1) "appendfsync"
 2) "always"
 3) "appendonly"
@@ -279,7 +279,7 @@ python    9181            root    5u  IPv4 15449632      0t0  TCP localhost:3299
 对于第一个配置问题，我们可以执行下面的命令，把 appendfsync 改成 everysec：
 
 ```shell
-$ docker exec -it redis redis-cli config set appendfsync everysec
+$ docker exec -it redis redis-cli model set appendfsync everysec
 OK
 ```
 

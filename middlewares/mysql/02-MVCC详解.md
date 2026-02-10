@@ -262,7 +262,7 @@ SELECT * FROM hero WHERE number = 1; # 得到的列name的值为'刘备'
 - 在执行SELECT语句时会先生成一个ReadView，ReadView的m_ids列表的内容就是[100, 200]，min_trx_id为100，max_trx_id为201，creator_trx_id为0。
 - 然后从版本链中挑选可见的记录，从图中可以看出，最新版本的列name的内容是'张飞'，该版本的trx_id值为100，在m_ids列表内，所以不符合可见性要求，根据roll_pointer跳到下一个版本。
 - 下一个版本的列name的内容是'关羽'，该版本的trx_id值也为100，也在m_ids列表内，所以也不符合要求，继续跳到下一个版本。
-- 最后一个版本的列name内容是'关羽'，该版本的trx_id值是80，小于min_trx_id(100)，所以对该事务是可见的，因此读到的name列值为刘备。
+- 最后一个版本的列name内容是'刘备'，该版本的trx_id值是80，小于min_trx_id(100)，所以对该事务是可见的，因此读到的name列值为刘备。
 
 
 之后，我们把事务id为100的事务提交一下，就像这样：
@@ -319,15 +319,55 @@ SELECT * FROM hero WHERE number = 1; # 得到的列name的值仍为'刘备'
 - 然后从版本链中挑选可见的记录，从图中可以看出，最新版本的列name的内容是'诸葛亮'，该版本的trx_id值为200，在m_ids列表内，所以不符合可见性要求，根据roll_pointer跳到下一个版本。
 - 下一个版本的列name的内容是'赵云'，该版本的trx_id值为200，也在m_ids列表内，所以也不符合要求，继续跳到下一个版本。
 - 下一个版本的列name的内容是'张飞'，该版本的trx_id值为100，而m_ids列表中是包含值为100的事务id的，所以该版本也不符合要求，同理下一个列name的内容是'关羽'的版本也不符合要求。继续跳到下一个版本。
-- 下一个版本的列name的内容是'刘备'，该版本的trx_id值为80，小于ReadView中的min_trx_id值100，所以这个版本是符合要求的，最后返回给用户的版本就是这条列c为'刘备'的记录。
-也就是说两次SELECT查询得到的结果是重复的，记录的列c值都是'刘备'，这就是可重复读的含义。如果我们之后再把事务id为200的记录提交了，
+- 下一个版本的列name的内容是'刘备'，该版本的trx_id值为80，小于ReadView中的min_trx_id值100，所以这个版本是符合要求的，最后返回给用户的版本就是这条列name为'刘备'的记录。
+也就是说两次SELECT查询得到的结果是重复的，记录的列name值都是'刘备'，这就是可重复读的含义。如果我们之后再把事务id为200的记录提交了，
 然后再到刚才使用REPEATABLE READ隔离级别的事务中继续查找这个number为1的记录，得到的结果还是'刘备'， 具体执行过程大家可以自己分析一下。
+
+# 3 工程实践中的MVCC边界
+
+上边讲清楚了原理，但在生产里最容易踩坑的地方是：哪些读是快照读，哪些读会加锁并读取最新版本。
+
+## 3.1 快照读 vs 当前读
+
+- 快照读（consistent read）：普通`SELECT`（不带`FOR UPDATE`/`FOR SHARE`）使用`ReadView` + undo版本链来决定可见性。
+- 当前读（current read）：`SELECT ... FOR UPDATE`、`SELECT ... FOR SHARE`、`UPDATE`、`DELETE`会读取当前最新版本并加锁，不会沿版本链回退到历史版本。
+- 结果差异：在`REPEATABLE READ`中，同一事务里普通`SELECT`可能一直看到老快照；但`UPDATE`或`SELECT ... FOR UPDATE`面对的是“当前值 + 锁冲突”，这也是很多“查询看到A，更新却被B影响”的根源。
+
+## 3.2 next-key lock / gap lock 与幻读防护
+
+- `REPEATABLE READ`下，锁定读和范围更新通常使用next-key lock（记录锁+间隙锁）来阻止其他事务向范围内插入新行，从而抑制幻读。
+- 这种防护依赖索引范围访问。条件没走到合适索引时，锁范围可能扩大，甚至退化为更重的锁，吞吐会明显下降。
+- `READ COMMITTED`下，gap lock总体更保守（常见场景不启用，仅在外键检查、唯一键冲突检查等场景保留），因此并发更高，但幻读防护更弱。
+- 普通`SELECT`是快照读，不加锁。它“看不到后续新插入行”并不等于阻止了幻读写入，只是读取了同一时点快照。
+
+## 3.3 undo purge 与长事务问题
+
+- `UPDATE`/`DELETE`产生undo版本，后台purge线程会在“没有活跃ReadView再需要这些旧版本”后回收。
+- 长事务（尤其长时间不提交的`REPEATABLE READ`事务）会拖住purge，导致历史版本积压（History list length升高）、undo膨胀、一致性读变慢。
+- 实践建议：事务尽量短小；避免“事务中等待用户输入/远程调用”；批处理按主键分批提交。
+
+可以用以下命令排查：
+
+```sql
+-- 观察长事务
+SELECT trx_id, trx_started, trx_state, trx_query
+FROM information_schema.innodb_trx
+ORDER BY trx_started;
+
+-- 观察历史版本积压（History list length）
+SHOW ENGINE INNODB STATUS\G
+
+-- MySQL 8 可选指标（开启innodb_metrics时更直观）
+SELECT name, count
+FROM information_schema.innodb_metrics
+WHERE name = 'trx_rseg_history_len';
+```
 
 
 **小结**
 
 从上边的描述中我们可以看出来，所谓的MVCC（Multi-Version Concurrency Control ，多版本并发控制）指的就是在使用
-READ COMMITTD、REPEATABLE READ这两种隔离级别的事务在执行普通的SELECT操作时访问记录的版本链的过程，这样可以
-使不同事务的读-写、写-读操作并发执行，从而提升系统性能。READ COMMITTD、REPEATABLE READ这两个隔离级别的一个很大不同就是：
-生成ReadView的时机不同，READ COMMITTD在每一次进行普通SELECT操作前都会生成一个ReadView，而REPEATABLE READ只在第一次
+READ COMMITTED、REPEATABLE READ这两种隔离级别的事务在执行普通的SELECT操作时访问记录的版本链的过程，这样可以
+使不同事务的读-写、写-读操作并发执行，从而提升系统性能。READ COMMITTED、REPEATABLE READ这两个隔离级别的一个很大不同就是：
+生成ReadView的时机不同，READ COMMITTED在每一次进行普通SELECT操作前都会生成一个ReadView，而REPEATABLE READ只在第一次
 进行普通SELECT操作前生成一个ReadView，之后的查询操作都重复使用这个ReadView就好了。

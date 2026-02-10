@@ -24,7 +24,6 @@ Go 1.18 版本开始，Go 更是内置了对 Fuzzing 的支持。接下来，我
 
 # 2 Go 1.18+ 内置 Fuzzing 支持
 从 Go 1.18 版本开始，Go 语言在标准工具链中内置了对 Fuzzing 的原生支持，这使得在 Go 项目中应用 Fuzzing 变得非常方便。
-
 Fuzz 测试函数的签名：一个 Fuzz 测试目标（Fuzz Target）是一个名为 FuzzXxx 的函数，它接受一个 *testing.F 类型的参数。
 
 ```go
@@ -89,7 +88,6 @@ func ParseAge(ageStr string) (int, error) {
 下面是针对 ParseAge 的 Fuzz 测试代码：
 
 ```go
-// ch25/fuzzing/simpleparser/parser_fuzz_test.go
 package simpleparser
 
 import (
