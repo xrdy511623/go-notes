@@ -26,13 +26,19 @@ ok      go-notes/lock/performance/atomic-replace-mutex  0.356s
 */
 
 func BenchmarkAddNormal(b *testing.B) {
-	add(c1, 1000)
+	for i := 0; i < b.N; i++ {
+		add(c1, 1000)
+	}
 }
 
 func BenchmarkAddUseAtomic(b *testing.B) {
-	addUseAtomic(c2, 1000)
+	for i := 0; i < b.N; i++ {
+		addUseAtomic(c2, 1000)
+	}
 }
 
 func BenchmarkAddUseMutex(b *testing.B) {
-	addUseMutex(c3, 1000)
+	for i := 0; i < b.N; i++ {
+		addUseMutex(c3, 1000)
+	}
 }

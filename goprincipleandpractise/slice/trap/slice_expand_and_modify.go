@@ -19,7 +19,7 @@ func modifyOne(s []int) {
 func modifyArray(arr [3]int) {
 	arr[0] = 1024
 	// []int{1024, 1, 2}
-	fmt.Printf("arr in modifyOne is:%v\n", arr)
+	fmt.Printf("arr in modifyArray is:%v\n", arr)
 }
 
 func modifyTwo(s []int) {

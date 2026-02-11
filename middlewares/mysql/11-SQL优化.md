@@ -127,7 +127,90 @@ insert 必须指定字段，禁止使用 insert into T values();
 
 # 2 SQL语句优化
 
-## 2.1 Explain工具
+SQL 优化的完整流程是：**定位问题 SQL → 分析执行计划 → 实施优化 → 验证效果**。很多人直接从第二步开始，
+但第一步"定位问题 SQL"才是入口——你得先知道哪条 SQL 慢了，才能去优化它。
+
+## 2.1 慢查询日志（Slow Query Log）
+
+慢查询日志是 MySQL 内置的"性能探针"，它会记录所有执行时间超过阈值的 SQL 语句，是定位慢 SQL 的第一手工具。
+
+### 2.1.1 开启慢查询日志
+
+```sql
+-- 查看当前是否开启
+SHOW VARIABLES LIKE 'slow_query_log';
+
+-- 开启慢查询日志
+SET GLOBAL slow_query_log = ON;
+
+-- 设置慢查询阈值（单位：秒），超过该时间的SQL会被记录
+-- 默认是10秒，建议根据业务设为1秒或更低
+SET GLOBAL long_query_time = 1;
+
+-- 查看慢查询日志文件位置
+SHOW VARIABLES LIKE 'slow_query_log_file';
+
+-- 是否记录未使用索引的查询（不管快慢都记录）
+SET GLOBAL log_queries_not_using_indexes = ON;
+```
+
+注意：通过 `SET GLOBAL` 设置的参数在 MySQL 重启后会失效，如需持久化，应写入 my.cnf 配置文件：
+
+```ini
+[mysqld]
+slow_query_log = ON
+long_query_time = 1
+slow_query_log_file = /var/log/mysql/slow.log
+log_queries_not_using_indexes = ON
+```
+
+### 2.1.2 分析慢查询日志
+
+慢查询日志记录了每条慢 SQL 的执行时间、扫描行数、返回行数等信息。日志量可能很大，
+直接看文件效率低，应该用工具来分析。
+
+**方法一：mysqldumpslow（MySQL 自带）**
+
+```bash
+# 按平均耗时排序，取前10条最慢的SQL
+mysqldumpslow -s at -t 10 /var/log/mysql/slow.log
+
+# 按出现次数排序，找最频繁的慢SQL
+mysqldumpslow -s c -t 10 /var/log/mysql/slow.log
+
+# 按锁等待时间排序
+mysqldumpslow -s l -t 10 /var/log/mysql/slow.log
+```
+
+mysqldumpslow 会将参数相同的 SQL 归类，输出格式类似：
+
+```
+Count: 385  Time=2.10s (808s)  Lock=0.00s (0s)  Rows=20.0 (7700), user@host
+  SELECT * FROM orders WHERE user_id = N AND status = N ORDER BY created_at LIMIT N, N
+```
+
+这条输出的意思是：这类 SQL 执行了 385 次，平均每次 2.10 秒，总耗时 808 秒，每次返回 20 行。
+
+**方法二：pt-query-digest（Percona Toolkit，功能更强大）**
+
+```bash
+# 安装 Percona Toolkit 后
+pt-query-digest /var/log/mysql/slow.log > slow_report.txt
+```
+
+pt-query-digest 会生成详细的报告，包括 SQL 指纹、执行次数、平均/最大/最小耗时、扫描行数分布等，
+非常适合做系统性的慢查询分析。
+
+### 2.1.3 线上慢查询排查的一般流程
+
+1. 通过慢查询日志或监控告警，定位到具体的慢 SQL
+2. 用 `EXPLAIN` 分析执行计划，找到慢的原因（全表扫描？没走索引？filesort？）
+3. 针对原因做优化（加索引？改写 SQL？调整查询条件？）
+4. 用 `EXPLAIN ANALYZE`（MySQL 8.0+）验证优化效果
+5. 上线后持续观察慢查询日志，确认问题已解决
+
+
+## 2.2 Explain工具
 
 ![explain-two.png](images%2Fexplain-two.png)
 
@@ -236,7 +319,55 @@ Using index 表示使用到了覆盖索引，不需要回表；
 Using filesort 表示查询出来的结果需要额外排序，数据量小的在内存，大的话在磁盘排序，建议优化;
 Using temporary 表示查询使用到了临时表，一般用于去重，分组等操作。
 
-### 2.1.1 用证据链判断SQL是否真的优化了
+### 2.2.1 EXPLAIN ANALYZE（MySQL 8.0.18+）
+
+`EXPLAIN` 只能告诉你优化器**计划**怎么执行，但计划和实际可能有差距。`EXPLAIN ANALYZE` 会**真正执行**
+SQL 语句，并返回每个执行步骤的实际耗时、实际扫描行数等信息，是验证优化效果的终极工具。
+
+```sql
+EXPLAIN ANALYZE
+SELECT id, c_name
+FROM t_student
+WHERE c_class_id = 6
+ORDER BY c_name
+LIMIT 20;
+```
+
+输出示例（MySQL 8.0 格式）：
+
+```
+-> Limit: 20 row(s)  (cost=4.25 rows=20) (actual time=0.152..0.168 rows=20 loops=1)
+    -> Sort: t_student.c_name, limit input to 20 row(s) per chunk  (cost=4.25 rows=40) (actual time=0.151..0.162 rows=20 loops=1)
+        -> Index lookup on t_student using idx_class_id (c_class_id=6)  (cost=4.25 rows=40) (actual time=0.087..0.118 rows=35 loops=1)
+```
+
+逐行解读：
+
+- **最外层 Limit**：计划返回 20 行，实际也返回了 20 行（`actual rows=20`），耗时 0.168ms
+- **Sort**：对结果按 c_name 排序，优化器估算输入 40 行（`rows=40`），实际输入 20 行排序后输出（内存排序，耗时 0.162ms）
+- **Index lookup**：通过 idx_class_id 索引查找 c_class_id=6 的记录，优化器估算 40 行，实际扫描到 35 行（`actual rows=35`），耗时 0.118ms
+
+关键字段含义：
+
+| 字段 | 含义 |
+|------|------|
+| `cost=4.25` | 优化器估算的代价 |
+| `rows=40` | 优化器估算的行数 |
+| `actual time=0.087..0.118` | 实际耗时（首行时间..末行时间，单位 ms） |
+| `actual rows=35` | 实际扫描/返回的行数 |
+| `loops=1` | 该步骤执行了几次（在嵌套循环中可能 >1） |
+
+**EXPLAIN 与 EXPLAIN ANALYZE 的对比使用**：
+
+```
+优化前：EXPLAIN ANALYZE 看到 actual rows=50000, actual time=320ms
+加索引后：EXPLAIN ANALYZE 看到 actual rows=35, actual time=0.1ms
+```
+
+注意：`EXPLAIN ANALYZE` 会真正执行 SQL，如果是 UPDATE/DELETE 语句，会真的修改数据！
+对于写操作，应该只用 `EXPLAIN`，不要用 `EXPLAIN ANALYZE`。
+
+### 2.2.2 用证据链判断SQL是否真的优化了
 
 建议用以下顺序判断，而不是只看某一个字段：
 
@@ -245,18 +376,8 @@ Using temporary 表示查询使用到了临时表，一般用于去重，分组�
 3. 对比优化前后总耗时和扫描行数，确认收益；
 4. 回到业务流量下做压测或灰度验证，避免只在小数据集上"看起来更快"。
 
-示例：
 
-```sql
-EXPLAIN ANALYZE
-SELECT id, name
-FROM t_student
-WHERE c_class_id = 6
-ORDER BY c_name
-LIMIT 20;
-```
-
-## 2.2  Trace工具
+## 2.3  Trace工具
 在MySQL执行计划中我们发现明明这个字段建立了索引，但是有的sql不会走索引，这是因为MySQL的内部优化器认为走索引的性能比不走索引全表扫描的性能要差，
 一个典型的场景是走索引查出来的数据量很大，然后还需要根据这些行记录去主键索引树回表查出完整数据，此时优化器会觉得得不偿失，不如直接全表扫描。
 而优化器的选择逻辑，来自trace工具的结论。
@@ -504,24 +625,7 @@ alter table t_student add index u_key (c_age, c_name, c_address);
 ```
 
 需要注意的是，如果联合索引列上使用范围查询的顺序不一致，会导致联合索引使用不充分。
-
-
-
-
-
-![explain-three.png](images%2Fexplain-three.png)
-
-
-
-
-
-由表结构可知，c_age，c_name, c_address的联合索引的长度，也就是key_len=1+1+30x4+2+1+100x4+2+1=2+123+403=528,
-上图第一条sql使用到了联合索引u_key且使用的长度为528字节，说明使用索引充分，完全命中了联合索引u_key；但是第二条sql
-就使用索引不充分了，从key_len=125字节推算，它只使用了c_age和c_name的部分索引，没有用到c_address列的索引，
-key_len=1+1+3x40+2+1=2+123=125， 此时我们分析一下这条sql，只能局部命中索引的原因在于索引列使用了范围查询，且
-范围查询的顺序相反，前两列都是小于等于的范围查询，最后一列是大于等于的范围查询，其查询顺序正好与前两列相反，因此只能
-命中前两列的联合索引。
-
+具体的 key_len 计算方法和这个例子的详细分析，参见前面 2.2 节 Explain 工具的 key_len 部分，此处不再重复。
 
 如果是`select *`返回全表字段，通常会出现回表，但这不等于索引失效。  
 是否使用索引，要看优化器是否仍然选择该索引作为访问路径。
@@ -686,20 +790,80 @@ mysql默认会将字符串转化为数字，要验证这一点很简单，连接
 
 
 ### 2.3.5 多表连接查询优化
+
+#### JOIN 算法详解
+
+MySQL 的 JOIN 执行算法经历了多个版本的演进，理解不同算法有助于针对性优化。
+
+**Nested Loop Join（NLJ，嵌套循环连接）**
+
+最基础的 JOIN 算法。从驱动表逐行读取，对于每一行到被驱动表中查找匹配行。
+如果被驱动表的关联字段有索引，每次查找是一次 B+ 树搜索（O(log n)），整体效率还可以接受。
+
+```
+伪代码：
+for each row r1 in 驱动表:
+    通过索引在被驱动表中查找满足 join 条件的行 r2
+    输出 (r1, r2)
+```
+
+**Block Nested Loop Join（BNL，块嵌套循环，MySQL 5.6-5.7）**
+
+当被驱动表的关联字段没有索引时，NLJ 每次都要全表扫描被驱动表，代价极高。
+BNL 的优化是引入 `join_buffer`：先把驱动表的一批行放入 join_buffer，然后扫描一次被驱动表，
+和 buffer 中的所有行做匹配，减少被驱动表的全表扫描次数。
+
+```
+伪代码：
+将驱动表的一批行装入 join_buffer
+for each row r2 in 被驱动表:
+    与 join_buffer 中的每一行做匹配
+    输出匹配的行对
+```
+
+`join_buffer_size` 默认 256KB，可以适当调大来减少扫描次数。
+
+**Hash Join（MySQL 8.0.18+）**
+
+MySQL 8.0.18 引入了 Hash Join，替代了 BNL。当被驱动表没有可用索引时，优化器会选择 Hash Join：
+1. 对较小的表（build 端）在内存中构建一个哈希表
+2. 扫描较大的表（probe 端），用哈希表做匹配
+
+Hash Join 的优势在于匹配是 O(1) 的哈希查找，而不是 BNL 中的逐行比较，大数据量下性能好很多。
+
+```sql
+-- 可以通过 EXPLAIN FORMAT=TREE 查看是否使用了 Hash Join
+EXPLAIN FORMAT=TREE
+SELECT * FROM t1 INNER JOIN t2 ON t1.a = t2.a;
+```
+
+如果输出中包含 `-> Hash join`，说明使用了 Hash Join。
+
+**三种算法对比：**
+
+| 算法 | 适用条件 | 版本 | 性能特点 |
+|------|---------|------|---------|
+| NLJ | 被驱动表关联字段有索引 | 所有版本 | 好（走索引，O(n * log m)） |
+| BNL | 被驱动表无索引 | 5.6-8.0.17 | 较差（减少了扫描次数，但仍是逐行比较） |
+| Hash Join | 被驱动表无索引 | 8.0.18+ | 较好（O(n + m)，但需要内存构建哈希表） |
+
+**实战建议：**
+
 ```sql
 explain select * from t1 inner join t2 on t1.a = t2.a
 ```
-t1是大表(一万条记录)，t2是小表(一百条记录)。在inner join查询中，如果关联字段建立了可用索引，通常会使用
-Nested Loop Join(含BKA等变体)，先从驱动表读取一批行，再到被驱动表按索引查找。驱动表选择由优化器根据代价决定，
-不应只看SQL书写顺序。
 
-如果关联字段没有可用索引，或者类型/字符集/排序规则不一致导致隐式转换，可能退化为更重的连接方式并放大扫描成本。
-在MySQL 8.0中，优化器还可能选择Hash Join(特定场景)，因此JOIN算法不应只理解为NLJ/BNL两种。
+t1 是大表（一万条记录），t2 是小表（一百条记录）。在 inner join 查询中，如果关联字段建立了可用索引，
+通常会使用 NLJ（含 BKA 等变体），先从驱动表读取一批行，再到被驱动表按索引查找。驱动表选择由优化器
+根据代价决定，不应只看 SQL 书写顺序。
 
-还有一个常见坑：连接字段的字符集/排序规则不一致，可能触发隐式转换并降低索引利用率。  
-因此，JOIN键建议统一数据类型、字符集、排序规则，并优先统一为utf8mb4体系。
+还有一个常见坑：**连接字段的字符集/排序规则/数据类型不一致**，可能触发隐式转换导致索引失效。
+例如 t1.a 是 `utf8mb4` 而 t2.a 是 `utf8`，JOIN 时 MySQL 会对 t2.a 做隐式转换，
+导致 t2 上的索引无法使用，退化为全表扫描。
 
-关联字段没建立索引前是全表扫描ALL
+因此，JOIN 键建议统一数据类型、字符集、排序规则，并优先统一为 utf8mb4 体系。
+
+关联字段没建立索引前是全表扫描 ALL
 
 
 
@@ -741,19 +905,39 @@ select * from smallTable where exists (select 1 from bigTable where bigTable.id 
 ```
 
 ### 2.3.7 深分页优化
+
+深分页是一个非常常见的性能问题。当 OFFSET 很大时，MySQL 需要扫描 OFFSET + LIMIT 行数据，然后丢弃前 OFFSET 行，只返回 LIMIT 行。
+OFFSET 越大，浪费的扫描就越多。
+
 ```sql
+-- 当 offset=10000 时，MySQL 实际要扫描 10010 行，丢弃前 10000 行
 explain select * from employees limit 10000, 10
 ```
 
-如果主键索引是连续的情况下可以这样优化:
+有以下三种优化方案：
+
+**方案一：主键连续时直接用 WHERE 条件**
+
+如果主键索引是连续的（自增且没有删除），可以直接用 WHERE 代替 OFFSET：
+
 ```sql
 explain select * from employees where id > 10000 limit 10;
 ```
 
-如果主键索引不连续，则可以这样优化:
+这样 MySQL 直接从 id=10001 开始扫描，只需要扫描 10 行。
+
+**方案二：延迟关联（Deferred Join）**
+
+如果主键索引不连续，可以先在子查询中利用覆盖索引快速定位到目标主键，再回表获取完整数据：
+
 ```sql
-select * from employees a inner join (select id from employees limit 10000, 10) b on a.id = b.id
+select * from employees a
+inner join (select id from employees limit 10000, 10) b
+on a.id = b.id
 ```
+
+子查询 `select id from employees limit 10000, 10` 只需要扫描主键索引（覆盖索引），不需要回表，
+速度快得多。定位到 10 个 id 后，再通过 JOIN 回表获取完整数据，只回表 10 次。
 
 
 
@@ -762,6 +946,51 @@ select * from employees a inner join (select id from employees limit 10000, 10) 
 ![explain-fourteen.png](images%2Fexplain-fourteen.png)
 
 
+
+
+**方案三：游标分页（Cursor-based Pagination，推荐）**
+
+游标分页是实际业务中最推荐的深分页方案。核心思路是：记住上一页最后一条记录的排序键值，
+下一页从该值开始查询，彻底消除 OFFSET。
+
+```sql
+-- 第一页：正常查询
+SELECT * FROM orders WHERE user_id = 100 ORDER BY id LIMIT 20;
+-- 假设第一页最后一条记录的 id = 258
+
+-- 第二页：用上一页最后一条的 id 作为游标
+SELECT * FROM orders WHERE user_id = 100 AND id > 258 ORDER BY id LIMIT 20;
+-- 假设第二页最后一条记录的 id = 312
+
+-- 第三页：
+SELECT * FROM orders WHERE user_id = 100 AND id > 312 ORDER BY id LIMIT 20;
+```
+
+游标分页的优势：
+- 无论翻到第多少页，每次查询只扫描 LIMIT 行，性能恒定
+- 充分利用索引（`WHERE user_id=100 AND id>258` 可以走 `(user_id, id)` 的联合索引）
+
+游标分页的局限：
+- 不支持"跳页"（不能直接跳到第 100 页），只能上一页/下一页
+- 需要前端配合传递游标值（上一页最后一条记录的排序键）
+- 排序键必须是唯一的（否则可能漏数据），如果排序字段不唯一，需要加上主键作为二级排序
+
+```sql
+-- 如果按 created_at 排序，created_at 可能重复，需要加上 id 作为二级排序
+SELECT * FROM orders
+WHERE user_id = 100
+  AND (created_at, id) > ('2024-01-15 10:00:00', 258)
+ORDER BY created_at, id
+LIMIT 20;
+```
+
+**三种方案的适用场景：**
+
+| 方案 | 适用场景 | 局限 |
+|------|---------|------|
+| WHERE id > N | 主键连续自增 | 有删除的表不适用 |
+| 延迟关联 | 需要支持跳页的管理后台 | OFFSET 极大时仍有性能瓶颈 |
+| 游标分页 | 移动端/信息流/无限滚动 | 不支持跳页 |
 
 
 
@@ -839,14 +1068,53 @@ order by多个列排序在遵循联合索引的最左匹配原则时，是可以
 
 
 
-> filesort文件排序的原理
-在执行文件排序的时候，会把查询的数据量大小与系统变量: max_length_for_sort_data的大小进行比较
-(默认是1024个字节), 如果比系统变量小，那么执行单路排序，否则执行双路排序。
+> filesort 文件排序的原理
 
-单路排序
-把所有的数据扔到sort_buffer内存缓冲区中，进行排序；
-双路排序
-取数据的排序字段和主键字段，扔到内存缓冲区，排序完成后，根据主键字段做一次回表查询，获取完整数据。
+当 MySQL 无法利用索引完成排序时，就会使用 filesort。filesort 并不一定意味着使用了磁盘文件，
+在数据量小的时候是在内存中完成排序的。
+
+**两种排序算法：**
+
+MySQL 会比较查询需要返回的所有列的总长度与系统变量 `max_length_for_sort_data` 的大小（默认 1024 字节）：
+
+- **单路排序（全字段排序）**：如果总长度 ≤ `max_length_for_sort_data`，把需要返回的所有字段都放入
+  `sort_buffer` 中排序，排完直接返回结果，不需要回表。
+- **双路排序（rowid 排序）**：如果总长度 > `max_length_for_sort_data`，只把排序字段和主键放入
+  `sort_buffer`，排完后再根据主键回表获取其他字段。多了一次回表，但 `sort_buffer` 能装下更多行。
+
+**sort_buffer 的作用：**
+
+`sort_buffer_size` 参数控制每个连接可用于排序的内存大小（默认 256KB）。
+- 如果需要排序的数据量 ≤ `sort_buffer_size`，在内存中完成排序
+- 如果数据量 > `sort_buffer_size`，MySQL 会使用磁盘临时文件做外部排序（归并排序），性能急剧下降
+
+```sql
+-- 查看 sort_buffer 大小
+SHOW VARIABLES LIKE 'sort_buffer_size';
+
+-- 适当调大（注意这是 per-connection 的，不是全局共享的）
+-- 如果并发连接很多，调太大会导致内存不够
+SET SESSION sort_buffer_size = 2 * 1024 * 1024;  -- 调大到 2MB
+```
+
+**监控排序情况：**
+
+```sql
+-- 查看排序相关的状态变量
+SHOW STATUS LIKE 'Sort_%';
+```
+
+| 变量 | 含义 |
+|------|------|
+| `Sort_merge_passes` | 使用磁盘临时文件做归并排序的次数，如果这个值很大，说明 sort_buffer 太小 |
+| `Sort_rows` | 已排序的行数 |
+| `Sort_scan` | 通过全表扫描完成的排序次数 |
+| `Sort_range` | 通过范围扫描完成的排序次数 |
+
+如果 `Sort_merge_passes` 持续增长，说明大量排序操作溢出到了磁盘，应该考虑：
+1. 给排序字段加索引，让 ORDER BY 走索引而不走 filesort
+2. 适当调大 `sort_buffer_size`
+3. 减少 SELECT 的字段数量（让更多行能放进 sort_buffer）
 
 ### 2.3.10 MySQL优化器有可能走错了索引，需要手动纠正，可以通过force index 指定索引。
 
@@ -921,7 +1189,6 @@ rate = 1 - (Innodb_buffer_pool_reads/Innodb_buffer_pool_read_requests) * 100%
 
 ### 2.3.13 group by 优化
 > 在MySQL 5.7等旧版本里，group by可能伴随额外排序，常见写法是显式加order by null；在MySQL 8.0里默认行为已有变化，不要把这条当作通用强规则。
-> 在MySQL 5.7等旧版本里，group by可能伴随额外排序，常见写法是显式加order by null；在MySQL 8.0里默认行为已有变化，不要把这条当作通用强规则。
 > 尽量让group by 过程用上表的索引(对分组字段建立索引)，确认方法是explain的extra里没有出现Using temporary和Using filesort。
 > 如果group by 需要统计的数据量不大，尽量使用内存临时表sort buffer；也可以通过适当调大tmp_table_size参数，来避免用到磁盘临时表。
 > 如果数据量是在太大，使用SQL_BIG_RESULT这个提示，来告诉优化器直接使用排序算法得到group by的结果。
@@ -965,3 +1232,108 @@ rate = 1 - (Innodb_buffer_pool_reads/Innodb_buffer_pool_read_requests) * 100%
 
 - 不推荐写：`is not null一定全表扫描`；
 - 推荐写：`is not null在低选择性场景可能全表扫描，是否走索引以EXPLAIN ANALYZE为准`。
+
+# 4 SQL 优化的边界：何时该引入异构数据源
+
+SQL 优化不是万能的。MySQL 作为 OLTP 型关系数据库，其核心设计目标是**事务处理**（高并发的短事务读写），
+而不是复杂的多维度搜索。当你发现以下场景时，应该在架构层面考虑引入 Elasticsearch 等异构数据源来承担查询职责。
+
+## 4.1 索引不是免费的：写放大问题
+
+每新增一个二级索引，InnoDB 在执行 INSERT / UPDATE / DELETE 时都需要额外维护该索引的 B+ 树有序性。
+具体代价包括：
+
+- **写放大**：一次业务写入变成 1（聚簇索引）+ N（N 个二级索引）次 B+ 树写操作
+- **页分裂概率增大**：索引越多，随机写导致的页分裂越频繁，空间利用率下降
+- **Change Buffer 压力**：二级索引的变更先写入 Change Buffer，索引越多，Buffer 占用越大，merge 越频繁
+- **DDL 成本**：添加/删除索引需要重建表（`ALGORITHM=INPLACE` 也需要遍历全量数据）
+
+因此，OLTP 系统通常建议**单表索引不超过 5-6 个**，联合索引字段不超过 3-4 个。
+这是一个工程权衡：索引太少查询慢，索引太多写入慢。
+
+## 4.2 MySQL 力不从心的查询场景
+
+以下场景下，无论怎么优化 SQL 和索引，MySQL 都难以提供令人满意的性能：
+
+### 4.2.1 多维度组合查询
+
+电商搜索场景：用户可以按品牌、价格区间、颜色、尺码、好评率、销量、发货地……数十个维度任意组合筛选。
+
+```sql
+-- 假设有 10 个筛选维度，用户可能使用其中任意 2-5 个
+SELECT * FROM products
+WHERE brand = 'Apple'
+  AND price BETWEEN 1000 AND 5000
+  AND color IN ('黑色', '白色')
+  AND rating >= 4.5
+ORDER BY sales DESC
+LIMIT 20;
+```
+
+如果要为所有可能的查询组合建索引，索引数量会爆炸（10 个字段的组合数是 $C_{10}^2 + C_{10}^3 + ... = 1013$）。
+实际上不可能建这么多索引，也承受不了这些索引带来的写放大。
+
+### 4.2.2 前缀模糊匹配 / 全文检索
+
+```sql
+-- 前缀模糊：% 在开头，B+ 树索引完全无法使用
+SELECT * FROM articles WHERE title LIKE '%分布式%';
+
+-- 全文搜索：即使 MySQL 5.6+ 支持 InnoDB FULLTEXT INDEX，
+-- 其分词能力（尤其是中文）、相关性排序、性能都远不如专业搜索引擎
+SELECT * FROM articles WHERE MATCH(content) AGAINST('微服务架构' IN BOOLEAN MODE);
+```
+
+B+ 树索引是按照键值**从左到右**有序排列的，`LIKE '%keyword%'` 无法利用这种有序性，
+必然退化为全表扫描。MySQL 的 FULLTEXT INDEX 虽然能应对简单场景，但在中文分词、同义词扩展、
+相关性打分、聚合分析等方面远不如 Elasticsearch。
+
+### 4.2.3 需要复杂聚合与分析的查询
+
+```sql
+-- 按多个维度做聚合统计
+SELECT category, brand, DATE(created_at),
+       COUNT(*), AVG(price), SUM(sales)
+FROM products
+WHERE created_at >= '2024-01-01'
+GROUP BY category, brand, DATE(created_at);
+```
+
+这类分析型查询（OLAP）涉及大量数据的扫描和聚合，MySQL 的行存储引擎天然不擅长。
+
+## 4.3 MySQL + ES 的协作架构
+
+在实际生产环境中，常见的做法是 **MySQL 做写入和事务，ES 做复杂查询**：
+
+```
+                  ┌──── 写入 ────→ MySQL（主库，OLTP）
+                  │                    │
+    业务层 ───────┤                    │ binlog / 业务双写 / Canal
+                  │                    ↓
+                  └──── 查询 ────→ Elasticsearch（搜索/聚合）
+```
+
+**数据同步方案：**
+
+| 方案 | 原理 | 优点 | 缺点 |
+|------|------|------|------|
+| 业务双写 | 写 MySQL 后同步写 ES | 实现简单 | 一致性难保证，业务侵入性强 |
+| 监听 binlog | 用 Canal / Debezium 监听 MySQL binlog，异步写入 ES | 对业务无侵入，一致性较好 | 有秒级延迟，需维护同步组件 |
+| 定时全量/增量同步 | 定时任务扫描 MySQL 变更写入 ES | 实现简单 | 延迟大，不适合实时场景 |
+
+生产环境推荐 **Canal / Debezium 监听 binlog** 的方案，对业务代码零侵入，延迟通常在秒级以内。
+
+**适用边界判断：**
+
+| 判断维度 | 继续用 MySQL | 考虑引入 ES |
+|----------|-------------|-------------|
+| 查询维度数量 | ≤ 3 个，可用联合索引覆盖 | > 5 个，任意组合 |
+| 模糊匹配 | 后缀匹配 `LIKE 'abc%'` | 前缀/中间匹配 `LIKE '%abc%'` |
+| 全文检索 | 不需要 | 需要分词、相关性排序 |
+| 数据量 | 单表百万级以内 | 单表千万级以上的复杂查询 |
+| 一致性要求 | 强一致（事务） | 可接受秒级延迟 |
+| 写入频率 | 高频写入，索引少 | 读多写少 |
+
+> **核心原则：MySQL 保证数据正确性（ACID 事务），ES 解决查询灵活性。二者是互补关系，不是替代关系。**
+> 在业务早期数据量小、查询简单时，MySQL 单体足够；当查询复杂度和数据量增长到 MySQL 索引方案无法兼顾读写性能时，
+> 就是引入 ES 的合理时机。这是一个架构演进决策，不是 SQL 优化能解决的问题。

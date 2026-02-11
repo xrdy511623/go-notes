@@ -118,7 +118,7 @@ func (m SegmentMap) Keys() []string {
 		close(ch)
 	}()
 
-	keys := make([]string, count)
+	keys := make([]string, 0, count)
 	// 统计各个协程并发读取Map分片的key
 	for k := range ch {
 		keys = append(keys, k)
