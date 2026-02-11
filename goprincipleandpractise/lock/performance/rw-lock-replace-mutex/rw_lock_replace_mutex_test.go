@@ -1,57 +1,46 @@
 package rwlockreplacemutex
 
 import (
-	"sync"
+	"sync/atomic"
 	"testing"
 )
 
-func benchmark(b *testing.B, rw RW, read, write int) {
-	for i := 0; i < b.N; i++ {
-		var wg sync.WaitGroup
-		for k := 0; k < read*1000; k++ {
-			wg.Add(1)
-			go func() {
-				rw.Read()
-				wg.Done()
-			}()
-		}
-		for k := 0; k < write*1000; k++ {
-			wg.Add(1)
-			go func() {
-				rw.Write()
-				wg.Done()
-			}()
-		}
-		wg.Wait()
+/*
+对比 Mutex 与 RWMutex 在不同读写比例下的并发开销。
+
+执行命令:
+
+	go test -run '^$' -bench '^Benchmark' -benchtime=3s -count=5 -benchmem .
+
+Apple M4(Go 1.24.5)下5次均值:
+
+	读多(9:1): Mutex 3712.0 ns/op, RWMutex 1047.8 ns/op, RWMutex快 3.54x
+	写多(1:9): Mutex 3690.2 ns/op, RWMutex 3687.4 ns/op, 性能基本持平
+	均衡(5:5): Mutex 3673.0 ns/op, RWMutex 3281.8 ns/op, RWMutex快 1.12x
+*/
+func benchmarkMixed(b *testing.B, rw RW, readWeight, writeWeight uint64) {
+	total := readWeight + writeWeight
+	if total == 0 {
+		b.Fatal("read/write weights must not both be zero")
 	}
+
+	var seq atomic.Uint64
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			n := seq.Add(1) - 1
+			if n%total < readWeight {
+				rw.Read()
+				continue
+			}
+			rw.Write()
+		}
+	})
 }
 
-/*
-三种场景，分别使用 Lock 和 RWLock 测试，共 6 个用例。
-每次测试读写操作合计 10000 次，例如读多写少场景，读 9000 次，写 1000 次。
-使用 sync.WaitGroup 阻塞直到读写操作全部运行结束。
-通过benchmark性能对比测试，可以看到:
-读写比为 9:1 时，读写锁的性能约为互斥锁的 7 倍
-读写比为 1:9 时，读写锁性能相当
-读写比为 5:5 时，读写锁的性能约为互斥锁的 2 倍
- go test -bench=^Bench -benchtime=5s -benchmem .
-goos: darwin
-goarch: arm64
-pkg: go-notes/goprincipleandpractise/lock/performance/rw-lock-replace-mutex
-cpu: Apple M4
-BenchmarkReadMore-10                 141          42184281 ns/op         1376758 B/op      21008 allocs/op
-BenchmarkReadMoreRW-10              1005           6096832 ns/op         1297193 B/op      20179 allocs/op
-BenchmarkWriteMore-10                141          42087855 ns/op         1352776 B/op      20758 allocs/op
-BenchmarkWriteMoreRW-10              152          38916778 ns/op         1362408 B/op      20859 allocs/op
-BenchmarkEqual-10                    140          42788979 ns/op         1378384 B/op      21025 allocs/op
-BenchmarkEqualRW-10                  272          22311830 ns/op         1366386 B/op      20900 allocs/op
-PASS
-ok      go-notes/goprincipleandpractise/lock/performance/rw-lock-replace-mutex  55.825s
-*/
-
-func BenchmarkReadMore(b *testing.B)    { benchmark(b, &Lock{}, 9, 1) }
-func BenchmarkReadMoreRW(b *testing.B)  { benchmark(b, &RWLock{}, 9, 1) }
-func BenchmarkWriteMore(b *testing.B)   { benchmark(b, &Lock{}, 1, 9) }
-func BenchmarkWriteMoreRW(b *testing.B) { benchmark(b, &RWLock{}, 1, 9) }
-func BenchmarkEqual(b *testing.B)       { benchmark(b, &Lock{}, 5, 5) }
-func BenchmarkEqualRW(b *testing.B)     { benchmark(b, &RWLock{}, 5, 5) }
+func BenchmarkReadMore(b *testing.B)    { benchmarkMixed(b, &Lock{}, 9, 1) }
+func BenchmarkReadMoreRW(b *testing.B)  { benchmarkMixed(b, &RWLock{}, 9, 1) }
+func BenchmarkWriteMore(b *testing.B)   { benchmarkMixed(b, &Lock{}, 1, 9) }
+func BenchmarkWriteMoreRW(b *testing.B) { benchmarkMixed(b, &RWLock{}, 1, 9) }
+func BenchmarkEqual(b *testing.B)       { benchmarkMixed(b, &Lock{}, 5, 5) }
+func BenchmarkEqualRW(b *testing.B)     { benchmarkMixed(b, &RWLock{}, 5, 5) }

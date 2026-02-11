@@ -33,44 +33,49 @@ benchmark 测试代码详见 [performance/narrow-critical-space](performance/nar
 核心思路：`countDefer` 使用 `defer m.Unlock()` 导致 `time.Sleep` 也被包含在临界区内；
 `countNarrow` 在 `c.i++` 后立即 `m.Unlock()`，`time.Sleep` 在锁外执行。
 
+```shell
+go test -bench=^Bench -benchtime=5s -count=5 -benchmem .
+```
+
+| 用例 | 均值(ns/op) | 对比 |
+|---|---:|---|
+| `BenchmarkCountDefer` | 15,934 | 基线 |
+| `BenchmarkCountNarrow` | 1,645 | **快约 9.69x（延迟降低约 89.7%）** |
+
+![narrow-critical-space](images/narrow-critical-space.png)
+
 ## 2.2 减小锁的粒度
 具体来讲，就是使用分段锁，将一把全局大锁替换为多个分段锁，减小锁的粒度，这样便能大幅减少锁竞争，通过
 空间换时间的方式提升程序性能。
 
 benchmark 测试代码详见 [performance/segment-lock-replace-global-lock](performance/segment-lock-replace-global-lock)
 
-三种场景，分别使用全局锁和分段锁测试，共 6 个用例。
-每次测试读写操作合计 10000 次，例如读多写少场景，读 9000 次，写 1000 次。
-通过 benchmark 对比，分段锁在读多、均匀场景下有明显优势，写多场景下二者接近。
+```shell
+go test -bench=^Bench -benchtime=5s -count=5 -benchmem .
+```
 
-这里简要解释下为什么写多读少场景分段锁优势最大。
+| 读写比 | 全局锁LM(ns/op) | 分段锁SM(ns/op) | 对比 |
+|---|---:|---:|---|
+| 9:1（读多） | 97.680 | 43.156 | **SM快约 2.26x（-55.8%）** |
+| 1:9（写多） | 98.118 | 55.146 | **SM快约 1.78x（-43.8%）** |
+| 5:5（均衡） | 64.938 | 50.182 | **SM快约 1.29x（-22.7%）** |
 
-读多写少 (9000 读 + 1000 写) — 全局锁竞争写锁不频繁：
+![segment-lock](images/segment-lock.png)
 
-LockedMap.Get() → RLock/RUnlock  (读锁，多个读可并发持有)
-LockedMap.Set() → Lock/Unlock    (写锁，独占)
+从这组数据看，三种负载下分段锁都更快，且**读多场景提升反而最大**。这并不与"分段锁主要缓解写争用"矛盾，
+原因有三层：
 
-9000 个读 goroutine 调用 RLock，读者之间不互斥。全局 RWMutex 本身就允许并发读，所以 9000 个读操作大部分时间可以并行执行，只有碰到 1000
-次写时才有短暂的互斥等待。全局锁的瓶颈并不严重，分段锁能优化的空间就小。
+1. **全局 RWMutex 的 `readerCount` 是隐藏热点**：RLock/RUnlock 每次都对同一个 `readerCount` 做 `atomic.Add`，
+   10 核并发时 MESI 协议导致 cache line 在核间反复迁移（cache line bouncing）。这个硬件层面的争用与"读不阻塞读"
+   的逻辑语义无关——分段后将这一热点分散到 32 个独立的 `readerCount`，效果立竿见影。
+2. **分段对读的并行度提升 > 对写的并行度提升**：10 个 goroutine + 32 个 shard，偶发碰撞（两个 goroutine 命中同一 shard）时，
+   读 vs 读可并行通过（RLock 不互斥），写 vs 写仍然串行（exclusive Lock 互斥）。分段后读路径在 shard 间并行、shard 内也并行；
+   写路径在 shard 间并行、**shard 内仍然串行**。
+3. **写路径的固定开销更高**：map 写入（可能触发 hash 扩容）比 map 读取贵，exclusive Lock/Unlock 的状态机比 RLock/RUnlock 复杂。
+   这些"固定开销"无法被分段优化掉，稀释了分段带来的相对收益。
 
-写多读少 (1000 读 + 9000 写) — 全局锁极其痛：
-
-9000 个写 goroutine 全部争抢同一把排他锁。Lock() 是独占的——同一时刻只有一个 goroutine 能持有写锁，其余 8999
-个全部排队。这就是经典的锁竞争热点。
-
-而分段锁将 9000 次写操作分散到 32 个 shard，每个 shard 平均只有 ~281 次写操作互相竞争，锁争用降低了一个数量级。
-
-本质规律：
-
-分段锁解决的核心问题是「写锁争用」，而非读锁争用。
-
-RWMutex 已经用读写分离解决了读并发的问题。
-分段锁在此基础上用空间换时间（多把锁）解决了写并发的问题。
-
-写操作占比越高 → 全局写锁争用越严重 → 分段锁的收益越大。
-
-这也解释了为什么 Java 的 ConcurrentHashMap 在 JDK 8 中仍然保留分段思想（桶级别的 CAS + synchronized），以及为什么 Go 的 sync.Map 用
-read/dirty 双 map 来实现写时隔离——都是在解决写竞争这个核心瓶颈。
+结论：**分段锁的核心收益是将锁热点从一把全局锁分散到 N 个分片锁，读写两条路径都受益；
+在纯内存操作（无 Sleep）的基准模型下，读路径因 `readerCount` cache line 争用的消除 + shard 内读读并行而获益更大。**
 
 
 ## 2.3 读写分离
@@ -80,20 +85,16 @@ read/dirty 双 map 来实现写时隔离——都是在解决写竞争这个核�
 benchmark 测试代码详见 [performance/rw-lock-replace-mutex](performance/rw-lock-replace-mutex)
 
 ```shell
-go test -bench=^Bench -benchtime=5s -benchmem .
-BenchmarkReadMore-16                 100          53971224 ns/op
-BenchmarkReadMoreRW-16               655           9061475 ns/op
-BenchmarkWriteMore-16                100          53521364 ns/op
-BenchmarkWriteMoreRW-16              122          52892140 ns/op
-BenchmarkEqual-16                     94          55132050 ns/op
-BenchmarkEqualRW-16                  201          29987758 ns/op
+go test -bench=^Bench -benchtime=5s -count=5 -benchmem .
 ```
 
-| 读写比 | Mutex (ns/op) | RWMutex (ns/op) | 倍率 |
-|--------|--------------|----------------|------|
-| 9:1 (读多) | 53,971,224 | 9,061,475 | **~6x** |
-| 1:9 (写多) | 53,521,364 | 52,892,140 | ~1x |
-| 5:5 (均匀) | 55,132,050 | 29,987,758 | **~2x** |
+| 读写比 | Mutex(ns/op) | RWMutex(ns/op) | 对比 |
+|---|---:|---:|---|
+| 9:1（读多） | 3,712.0 | 1,047.8 | **RWMutex快约 3.54x（-71.8%）** |
+| 1:9（写多） | 3,690.2 | 3,687.4 | 基本持平 |
+| 5:5（均衡） | 3,673.0 | 3,281.8 | **RWMutex快约 1.12x（-10.6%）** |
+
+![rw-replace-mutex](images/rw-replace-mutex.png)
 
 **RWMutex 为什么不会出现 writer 饥饿？**
 
@@ -104,14 +105,24 @@ Go 的 `sync.RWMutex` 内部有防饥饿机制：当有 writer 在等待时，�
 
 ## 2.4 使用atomic代替锁实现无锁化
 如果只是在并发操作时保护一个变量，使用原子操作比使用互斥锁性能更优。
-因为互斥锁的实现是通过操作系统来实现的(系统调用), 而atomic原子操作都是通过硬件实现的，效率比前者要高很多。
+atomic 主要由 CPU 原子指令完成；Mutex 在无竞争时走用户态快路径，在竞争时会走慢路径并涉及阻塞/唤醒，开销通常更高。
 
 benchmark 测试代码详见 [performance/atomic-replace-mutex](performance/atomic-replace-mutex)
 
 
-结论：atomic 操作在硬件层面通过 CPU 指令（如 `LOCK XADD`、`CMPXCHG`）直接保证原子性，
-不需要操作系统介入；而 Mutex 在竞争时需要通过信号量进入内核态休眠/唤醒。因此单变量保护场景下，
-atomic 性能远优于 Mutex。
+```shell
+go test -bench=^Bench -benchtime=5s -count=5 -benchmem .
+```
+
+| 用例 | 均值(ns/op) | 说明 |
+|---|---:|---|
+| `BenchmarkAddNormal` | 0.057 | 无同步基线（非并发安全） |
+| `BenchmarkAddUseAtomic` | 31.930 | 原子累加 |
+| `BenchmarkAddUseMutex` | 62.298 | 互斥锁累加 |
+
+对比可见：在“单变量并发计数”场景下，atomic 相比 mutex 约快 **1.95x**（延迟降低约 **48.7%**）。
+
+![atomic-replace-mutex](images/atomic-replace-mutex.png)
 
 ### 2.4.1 atomic 操作全景
 
@@ -322,7 +333,7 @@ exit status 2
 解决的方案是不使用defer，这样便可顺序加锁和释放锁，但是这个问题的关键在于互斥锁Mutex是不可重入的，所以最好
 不要重复加锁。
 
-solve-repeat-mutex.png
+![solve-repeat-mutex](images/solve-repeat-mutex.png)
 
 ## 3.3 atomic.Value误用导致程序崩溃
 通常我们会使用atomic.Value来确保更新配置的并发安全，但如果我们配置里使用的是无法保证线程安全的map，那么有可能
@@ -342,11 +353,11 @@ atomic.Value的保护下，所以并不是并发安全的。
 Store写入的数据不能是空指针nil；
 对于同一个atomic.Value不能存入不同类型的值。
 
-## 3.3 更多死锁模式
+## 3.4 更多死锁模式
 
 除了上面的重入死锁，还有几种常见地死锁模式需要警惕：
 
-### 3.3.1 锁顺序死锁
+### 3.4.1 锁顺序死锁
 
 两个 goroutine 以相反顺序获取两把锁，形成循环等待：
 
@@ -360,7 +371,7 @@ mu2.Lock()  // 等 B 释放    mu1.Lock()  // 等 A 释放 → 死锁！
 
 **解决方案**：全局统一锁的获取顺序。如果业务上必须同时持有 mu1 和 mu2，所有代码路径都先锁 mu1 再锁 mu2。
 
-### 3.3.2 RWMutex 读锁内获取写锁
+### 3.4.2 RWMutex 读锁内获取写锁
 
 ```go
 var rw sync.RWMutex
@@ -373,7 +384,7 @@ rw.Lock()  // 死锁！当前 goroutine 持有读锁，写锁要等所有读锁�
 Go 的 RWMutex 不支持锁升级（read lock → write lock）。如果需要"先读后写"，
 必须先释放读锁再获取写锁，或者直接用写锁。
 
-### 3.3.3 持有锁时阻塞在 channel
+### 3.4.3 持有锁时阻塞在 channel
 
 ```go
 mu.Lock()
@@ -383,7 +394,7 @@ mu.Unlock()  // 永远执行不到
 
 **原则**：不要在持有锁的情况下做可能阻塞的操作（channel 收发、网络 IO、等待其他锁）。
 
-## 3.4 对未加锁的 Mutex 调用 Unlock 会 panic
+## 3.5 对未加锁的 Mutex 调用 Unlock 会 panic
 
 ```go
 var mu sync.Mutex
