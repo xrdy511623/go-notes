@@ -766,7 +766,7 @@ func WithRequestID(next http.Handler) http.Handler {
 
 // 获取 request-id
 func GetRequestID(ctx context.Context) string {
-    ctx.Value(requestIDKey).(string)
+    return ctx.Value(requestIDKey).(string)
 }
 
 func Handle(rw http.ResponseWriter, req *http.Request) {
@@ -901,3 +901,504 @@ func main() {
 }
 ```
 增加一个 context，在 break 前调用 cancel 函数，取消 goroutine。gen 函数在接收到取消信号后，直接退出，系统回收资源。
+
+# 5 Go 1.20+ 新增 API
+
+Go 1.20 和 1.21 引入了几个重要的 context API，大幅增强了错误追踪和生命周期控制能力。
+
+## 5.1 WithCancelCause 与 Cause（Go 1.20）
+
+标准的 `WithCancel` 取消后，`ctx.Err()` 只能返回 `context.Canceled`，无法区分**为什么**被取消。`WithCancelCause` 允许传入自定义原因：
+
+```go
+ctx, cancel := context.WithCancelCause(parentCtx)
+
+// 取消时传入具体原因
+cancel(fmt.Errorf("downstream service timeout: %s", serviceName))
+
+// 获取取消原因
+err := context.Cause(ctx)
+fmt.Println(err) // "downstream service timeout: payment-service"
+```
+
+与 `ctx.Err()` 的区别：
+
+```go
+ctx, cancel := context.WithCancelCause(context.Background())
+cancel(errors.New("custom reason"))
+
+fmt.Println(ctx.Err())          // "context canceled"（固定值）
+fmt.Println(context.Cause(ctx)) // "custom reason"（自定义原因）
+```
+
+在微服务错误追踪中，`Cause` 可以区分"上游超时"、"本地超时"、"主动取消"、"熔断器触发"等不同原因，比单纯的 `context.Canceled` 有用得多。
+
+`WithDeadlineCause` 和 `WithTimeoutCause` 是对应的超时版本：
+
+```go
+ctx, cancel := context.WithTimeoutCause(parentCtx, 5*time.Second,
+    fmt.Errorf("payment API did not respond within 5s"))
+defer cancel()
+```
+
+## 5.2 WithoutCancel（Go 1.21）
+
+`WithoutCancel` 创建一个不随父节点取消的 context，但保留父节点的 Value：
+
+```go
+parentCtx, parentCancel := context.WithCancel(context.Background())
+parentCtx = context.WithValue(parentCtx, traceIDKey{}, "abc-123")
+
+childCtx := context.WithoutCancel(parentCtx)
+
+parentCancel() // 取消父节点
+
+fmt.Println(parentCtx.Err()) // "context canceled"
+fmt.Println(childCtx.Err())  // nil — 子节点不受影响！
+
+// 但 Value 仍然可用
+fmt.Println(childCtx.Value(traceIDKey{})) // "abc-123"
+```
+
+典型使用场景：
+
+- **异步日志/审计**：请求处理完毕后，仍需要用 request-scoped 的 traceID 写入审计日志，但不希望被请求取消中断
+- **后台清理任务**：请求取消后启动的清理 goroutine，需要访问 Value 但不应被取消
+- **发送最终响应**：gRPC/HTTP handler 返回后写 metric，不应因客户端断开而取消
+
+```go
+func handler(ctx context.Context) {
+    // 请求处理...
+
+    // 异步写入审计日志，不受请求取消影响
+    auditCtx := context.WithoutCancel(ctx)
+    go writeAuditLog(auditCtx, result)
+}
+```
+
+## 5.3 AfterFunc（Go 1.21）
+
+`AfterFunc` 在 context 被取消（或超时）时执行一个回调函数：
+
+```go
+ctx, cancel := context.WithCancel(parentCtx)
+
+stop := context.AfterFunc(ctx, func() {
+    // ctx 被取消时在新 goroutine 中执行
+    fmt.Println("cleaning up resources...")
+    cleanupConnections()
+})
+
+// 如果不再需要回调（例如正常完成），可以取消注册
+// stop() 返回 true 表示成功取消注册，false 表示回调已执行或正在执行
+if stop() {
+    fmt.Println("cleanup cancelled, not needed")
+}
+
+defer cancel()
+```
+
+`AfterFunc` 的回调运行在新的 goroutine 中，且 `stop` 函数是并发安全的。
+
+使用场景：
+
+```go
+// 场景1: context 取消时关闭数据库连接
+conn := db.Conn()
+stop := context.AfterFunc(ctx, func() {
+    conn.Close()
+})
+defer stop()
+
+// 场景2: 合并多个 context 的取消信号
+mergedCtx, mergedCancel := context.WithCancel(context.Background())
+stop1 := context.AfterFunc(ctx1, func() { mergedCancel() })
+stop2 := context.AfterFunc(ctx2, func() { mergedCancel() })
+defer stop1()
+defer stop2()
+// mergedCtx 会在 ctx1 或 ctx2 任一取消时被取消
+```
+
+# 6 context.Value 最佳实践
+
+context.Value 是 context 包中最受争议的 API。前面提到过 Value 本质上是一个 O(n) 链表查找，容易被滥用。下面给出结构化的最佳实践。
+
+## 6.1 key 的类型选择
+
+```go
+// 错误：string key，跨包容易冲突
+ctx = context.WithValue(ctx, "user_id", 42) // 包 A
+ctx = context.WithValue(ctx, "user_id", 99) // 包 B 覆盖了 A 的值
+
+// 正确：不可导出的 struct{} 类型，其他包无法构造相同的 key
+type userIDKey struct{} // 不可导出，包级别唯一
+ctx = context.WithValue(ctx, userIDKey{}, 42)
+```
+
+为什么 `struct{}` 比 `int` 或 `string` 更好？
+
+- `struct{}` 类型零大小，不额外分配内存
+- 不可导出的类型无法在其他包中构造，彻底避免命名冲突
+- 类型断言时提供编译期安全性
+
+## 6.2 用结构体打包 request-scoped 数据
+
+多次 `WithValue` 会创建多层链表，每次查找都要遍历。正确做法是将同一类数据打包到一个结构体中：
+
+```go
+// 定义 request-scoped 元数据
+type RequestMeta struct {
+    TraceID   string
+    UserID    int64
+    TenantID  string
+    RequestID string
+    Locale    string
+}
+
+type requestMetaKey struct{}
+
+// middleware 中一次性设置
+func WithRequestMeta(ctx context.Context, meta *RequestMeta) context.Context {
+    return context.WithValue(ctx, requestMetaKey{}, meta)
+}
+
+// handler 中一次性获取
+func GetRequestMeta(ctx context.Context) *RequestMeta {
+    meta, _ := ctx.Value(requestMetaKey{}).(*RequestMeta)
+    return meta
+}
+```
+
+| 方式 | WithValue 次数 | 查找深度 | 内存分配 |
+|------|--------------|---------|---------|
+| 每个字段一次 WithValue | N | O(N) | N 个 valueCtx |
+| 结构体打包一次 WithValue | 1 | O(1) | 1 个 valueCtx + 1 个 struct |
+
+## 6.3 context.Value 适合放什么？
+
+**适合**（request-scoped，跨 API 传递的元数据）：
+- Trace ID / Request ID（链路追踪）
+- 认证信息（token、user ID、tenant ID）
+- 语言/时区偏好（国际化）
+- 请求来源标识
+
+**不适合**（应作为函数参数显式传递）：
+- 业务逻辑参数（订单 ID、商品数量）
+- 数据库连接、HTTP client
+- 配置项、feature flags
+- 日志级别
+
+判断标准：**如果删掉这个值，程序逻辑是否改变？** 如果不改变（只影响可观测性），那就适合放 context.Value。
+
+> 陷阱演示 → [trap/value-abuse](trap/value-abuse/main.go)
+
+> 性能对比 → [performance/value_lookup_test.go](performance/value_lookup_test.go)
+
+# 7 Deadline Budgeting（deadline 预算传播）
+
+在微服务链路中（A→B→C），每一层需要从剩余 deadline 中"扣除"自身处理开销，传递给下游。这称为 deadline budgeting。
+
+## 7.1 问题
+
+```
+Client → Service A (总超时 500ms)
+              ├→ Service B (应该分多少超时？)
+              │       └→ Service C (?)
+              └→ Cache (?)
+```
+
+如果 A 把完整的 500ms 传给 B，B 再传给 C，那么 A 自身的后续处理就没有时间了。
+
+## 7.2 正确的传播方式
+
+```go
+func (s *ServiceA) Handle(ctx context.Context) (*Result, error) {
+    // 获取当前剩余的 deadline
+    deadline, ok := ctx.Deadline()
+    if !ok {
+        // 没有 deadline，设一个默认值
+        var cancel context.CancelFunc
+        ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
+        defer cancel()
+        deadline, _ = ctx.Deadline()
+    }
+
+    remaining := time.Until(deadline)
+
+    // 留 50ms 给自身的后续处理（聚合结果、日志等）
+    selfBudget := 50 * time.Millisecond
+    if remaining <= selfBudget {
+        return nil, fmt.Errorf("insufficient deadline budget: %v", remaining)
+    }
+
+    downstreamBudget := remaining - selfBudget
+
+    // 调用下游时使用扣减后的 deadline
+    downstreamCtx, cancel := context.WithTimeout(ctx, downstreamBudget)
+    defer cancel()
+
+    result, err := s.callServiceB(downstreamCtx)
+    if err != nil {
+        return nil, err
+    }
+
+    // 后续处理（在预留的 50ms 内完成）
+    return s.aggregate(result), nil
+}
+```
+
+## 7.3 gRPC 的自动传播
+
+gRPC 框架自动将 deadline 通过 metadata 在 client/server 间传播，无需手动处理：
+
+```go
+// Client 设置 deadline
+ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+defer cancel()
+resp, err := client.GetUser(ctx, &pb.GetUserRequest{Id: 42})
+
+// Server 收到的 ctx 自动携带了剩余的 deadline
+func (s *server) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.User, error) {
+    deadline, ok := ctx.Deadline() // ok == true，deadline 由 gRPC 框架自动传播
+    remaining := time.Until(deadline)
+    // remaining < 500ms（已扣除网络传输时间）
+    // ...
+}
+```
+
+这是 context.Deadline() 方法最核心的使用场景之一——让下游服务感知到上游的时间预算。
+
+# 8 Context 性能分析
+
+## 8.1 创建开销
+
+| 操作 | 典型耗时 | 内存分配 | 说明 |
+|------|---------|---------|------|
+| `WithValue` | ~50ns | 1 alloc（valueCtx） | 最轻量 |
+| `WithCancel` | ~150ns | 2 allocs（cancelCtx + done chan） | 需初始化 cancel 机制 |
+| `WithCancelCause` | ~150ns | 2 allocs | 与 WithCancel 接近 |
+| `WithTimeout` | ~350ns | 3 allocs | 额外创建 Timer |
+
+## 8.2 Value 查找的 O(n) 问题
+
+`context.Value()` 的查找是沿着 context 链线性搜索的。链越深，查找越慢：
+
+```
+深度 1:   ~3-5ns
+深度 10:  ~20-40ns
+深度 50:  ~100-200ns
+深度 100: ~200-400ns
+```
+
+**优化策略**：将同一类数据打包成结构体，只做一次 `WithValue`。这样无论有多少个字段，查找始终只需遍历到那一层。
+
+## 8.3 Done() channel 检查开销
+
+```go
+select {
+case <-ctx.Done():
+    // ...
+default:
+    // ...
+}
+```
+
+对于 `context.Background()`，`Done()` 返回 nil，select 直接走 default，开销 ~1ns。
+对于 `WithCancel` 创建的 context，`Done()` 返回一个真实的 channel，select 需要检查 channel 状态，开销 ~5-10ns。
+
+在性能热点路径中，如果确定不需要取消（如纯计算循环），避免在每次迭代中检查 `ctx.Done()`。
+
+## 8.4 Cancel 传播开销
+
+调用 `cancel()` 时，runtime 需要：
+1. 加锁（hchan.lock）
+2. 关闭 done channel
+3. 遍历 children map，递归 cancel 所有子节点
+4. 将子节点 map 置 nil
+5. 从父节点中移除自己
+
+开销与子节点数量成正比。1000 个子节点的 cancel 约 100-200μs。
+
+> 基准测试 → [performance/cancel_propagation_test.go](performance/cancel_propagation_test.go)
+
+> Value 查找对比 → [performance/value_lookup_test.go](performance/value_lookup_test.go)
+
+# 9 Context 与标准库集成
+
+## 9.1 database/sql
+
+Go 1.8 开始，`database/sql` 包全面支持 context：
+
+```go
+ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+defer cancel()
+
+// 查询
+rows, err := db.QueryContext(ctx, "SELECT * FROM users WHERE id = ?", userID)
+
+// 执行
+result, err := db.ExecContext(ctx, "UPDATE users SET name = ? WHERE id = ?", name, id)
+
+// 事务
+tx, err := db.BeginTx(ctx, nil)
+```
+
+当 context 被取消或超时时，数据库驱动会：
+1. 取消正在执行的 SQL 查询（发送 cancel 信号到数据库）
+2. 关闭底层连接（如果查询无法及时取消）
+3. 返回 `context.DeadlineExceeded` 或 `context.Canceled` 错误
+
+**注意**：事务中的 context 取消会导致事务自动回滚。
+
+## 9.2 net/http
+
+HTTP 请求天然绑定了 context：
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context() // 获取请求绑定的 context
+
+    // 当客户端断开连接时，ctx 会自动取消
+    select {
+    case <-ctx.Done():
+        log.Println("client disconnected:", ctx.Err())
+        return
+    case result := <-doWork(ctx):
+        json.NewEncoder(w).Encode(result)
+    }
+}
+```
+
+HTTP client 也支持 context：
+
+```go
+ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+defer cancel()
+
+req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+resp, err := http.DefaultClient.Do(req)
+// 超时后自动取消请求
+```
+
+`http.Server` 提供了 `BaseContext` 和 `ConnContext` 钩子：
+
+```go
+server := &http.Server{
+    // 为所有请求设置基础 context（例如注入全局依赖）
+    BaseContext: func(l net.Listener) context.Context {
+        return context.WithValue(context.Background(), serverKey{}, "main")
+    },
+    // 为每个连接设置 context（例如记录客户端 IP）
+    ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+        return context.WithValue(ctx, clientIPKey{}, c.RemoteAddr().String())
+    },
+}
+```
+
+## 9.3 errgroup（golang.org/x/sync/errgroup）
+
+`errgroup` 将 context 与一组 goroutine 的生命周期绑定。任何一个 goroutine 返回错误时，context 自动取消，其余 goroutine 可以感知到取消信号并提前退出：
+
+```go
+import "golang.org/x/sync/errgroup"
+
+g, ctx := errgroup.WithContext(parentCtx)
+
+g.Go(func() error {
+    return fetchUserProfile(ctx, userID)   // 任务 1
+})
+g.Go(func() error {
+    return fetchUserOrders(ctx, userID)    // 任务 2
+})
+g.Go(func() error {
+    return fetchRecommendations(ctx, userID) // 任务 3
+})
+
+if err := g.Wait(); err != nil {
+    // 某个任务失败 → ctx 被取消 → 其他任务收到信号并退出
+    log.Printf("failed: %v", err)
+}
+```
+
+与手动 `sync.WaitGroup` + `context.WithCancel` 相比，`errgroup` 将"错误传播"和"取消传播"统一到一起，代码更简洁、更不容易出错。
+
+# 10 常见 Context 陷阱
+
+## 10.1 忘记调用 cancel()
+
+`WithTimeout` / `WithDeadline` 内部创建了 `time.Timer`。如果不调用 `cancel()`，即使 context 超时，timerCtx 仍会保留在父节点的 `children` map 中，直到 Timer 触发或父节点被取消。
+
+```go
+// 错误
+func bad(ctx context.Context) {
+    ctx, _ = context.WithTimeout(ctx, 5*time.Second)
+    // Timer 在 5 秒内一直存在，即使函数已返回
+}
+
+// 正确
+func good(ctx context.Context) {
+    ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+    defer cancel() // 函数退出时立即释放 Timer
+}
+```
+
+> 陷阱演示 → [trap/forget-cancel](trap/forget-cancel/main.go)
+
+## 10.2 在结构体中存储 context
+
+Go 官方明确建议：**不要将 Context 存储在结构体中**。
+
+```go
+// 错误
+type Service struct {
+    ctx context.Context // 生命周期不可控
+}
+
+// 正确
+type Service struct { /* 不含 ctx */ }
+func (s *Service) Do(ctx context.Context) error { ... }
+```
+
+原因：
+1. context 是 per-request 的，结构体可能被长期持有或跨请求复用
+2. 存入结构体后，无法保证 context 在使用时仍然有效
+3. 违背了"context 应该沿着调用链传递"的设计意图
+
+唯一的例外是 `http.Request` 等本身就绑定到单个请求生命周期的类型。
+
+> 陷阱演示 → [trap/context-in-struct](trap/context-in-struct/main.go)
+
+## 10.3 context.Value 滥用
+
+```go
+// 错误：用 context 传递业务参数
+ctx = context.WithValue(ctx, "order_id", orderID)
+processOrder(ctx) // 从 ctx 中取 order_id 是隐式依赖
+
+// 正确：业务参数显式传递
+processOrder(ctx, orderID) // 依赖关系清晰
+```
+
+context.Value 的另一个问题是**类型不安全**——编译器无法检查 key-value 的类型对应关系，运行时类型断言失败会导致 panic。
+
+> 陷阱演示 → [trap/value-abuse](trap/value-abuse/main.go)
+
+## 10.4 context 树无限增长
+
+在循环中反复创建子 context 而不取消，会导致 context 树不断膨胀：
+
+```go
+// 错误：每次迭代创建新 context，旧的不释放
+for {
+    ctx, _ := context.WithTimeout(parentCtx, time.Second)
+    doWork(ctx)
+    // cancel 未调用，timerCtx 累积
+}
+
+// 正确：每次迭代创建并释放
+for {
+    ctx, cancel := context.WithTimeout(parentCtx, time.Second)
+    doWork(ctx)
+    cancel() // 立即释放
+}
+```

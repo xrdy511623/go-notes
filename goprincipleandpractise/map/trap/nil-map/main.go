@@ -21,8 +21,8 @@ func main() {
 	// ---- nil map ----
 	var m map[string]int
 	fmt.Println("== nil map ==")
-	fmt.Println("m == nil:", m == nil) // true
-	fmt.Println("len(m):", len(m))     // 0
+	fmt.Println("m == nil:", m == nil)   // true
+	fmt.Println("len(m):", len(m))       // 0
 	fmt.Println("m[\"key\"]:", m["key"]) // 0（零值，不 panic）
 
 	v, ok := m["missing"]

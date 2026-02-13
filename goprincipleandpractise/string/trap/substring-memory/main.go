@@ -39,7 +39,7 @@ func main() {
 	fmt.Println("\n=== 正确做法: 使用 strings.Clone ===")
 
 	big2 := strings.Repeat("y", 1<<20) // 又一个 1 MB 字符串
-	cloned := strings.Clone(big2[:10])  // 独立拷贝，不再引用底层大数组
+	cloned := strings.Clone(big2[:10]) // 独立拷贝，不再引用底层大数组
 
 	big2 = ""
 	runtime.GC()
