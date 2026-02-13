@@ -81,7 +81,7 @@ Redo Log 和 Binlog：
 重做日志（Redo Log）记录物理更改，确保崩溃后能重做。
 二进制日志（Binlog）记录逻辑更改，用于主从复制和点恢复。
 
-双写缓冲（Doublewrite Buffer）：
+双写缓冲（Double write Buffer）：
 InnoDB 使用双写缓冲，将数据先写入内存缓冲区，再写入磁盘，确保数据完整性。
 
 崩溃恢复：

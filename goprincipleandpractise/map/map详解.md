@@ -866,3 +866,98 @@ cache.Set("my-unique-key", []byte("value"))
 entry, _ := cache.Get("my-unique-key")
 fmt.Println(string(entry))
 ```
+
+# 12 nil map 与 empty map 的行为差异
+
+未初始化的 map（nil map）和已初始化的空 map（empty map）行为上有关键差异：
+
+| 操作 | nil map | empty map |
+|------|---------|-----------|
+| 读 `m[key]` | 返回零值，不 panic | 返回零值 |
+| `len(m)` | 0 | 0 |
+| `range` | 不执行循环体 | 不执行循环体 |
+| 写 `m[key] = v` | **panic** | 安全 |
+| `delete(m, key)` | 安全（Go 1.0+） | 安全 |
+| `m == nil` | true | false |
+
+这是初学者最常见的 panic 来源之一。示例代码见 `trap/nil-map/main.go`：
+
+```go
+// nil map：仅声明未初始化
+var m map[string]int
+fmt.Println(m["key"])   // 0（零值，不 panic）
+
+m["key"] = 1            // panic: assignment to entry in nil map
+
+// empty map：通过 make 或字面量创建
+m2 := make(map[string]int)
+m2["key"] = 1           // 安全
+```
+
+最佳实践：始终通过 `make(map[K]V)` 或字面量 `map[K]V{}` 初始化 map，避免直接使用 `var m map[K]V` 后写入。
+
+# 13 range 中 delete 是安全的
+
+Go 语言规范明确保证：range 遍历 map 的过程中 delete 是安全的。
+
+> "If a map entry that has not yet been reached is removed during iteration,
+>  the corresponding iteration value will not be produced.
+>  If a map entry is created during iteration, that entry may be produced
+>  during the iteration or may be skipped."
+>  — The Go Programming Language Specification
+
+示例代码见 `trap/range-delete/main.go`：
+
+```go
+m := map[int]string{1: "a", 2: "b", 3: "c", 4: "d"}
+for k := range m {
+    if k%2 == 0 {
+        delete(m, k) // 安全：删除当前或其他 key 均可
+    }
+}
+fmt.Println(m) // map[1:a 3:c]
+```
+
+注意两点：
+1. range 中 **delete 安全**，包括删除当前 key 和尚未遍历到的 key。
+2. range 中 **insert 行为不确定**——新插入的 key 可能出现在后续迭代中，也可能不出现。因此应避免在 range 中向 map 插入新 key。
+
+# 14 map 不能缩容
+
+delete 操作只清除 key/value 并将 tophash 标记为 empty，**不会释放底层 bucket 数组的内存**。即使删除全部元素，已分配的 bucket 内存仍然保留。
+
+实验代码见 `trap/no-shrink/no_shrink_test.go`，测试结果如下：
+
+```shell
+go test -run TestMapNoShrink -v
+=== RUN   TestMapNoShrink
+    no_shrink_test.go:23: 空 map 堆内存: 0.70 MB
+    no_shrink_test.go:29: 填充 100w 后堆内存: 42.08 MB
+    no_shrink_test.go:39: 删除全部后堆内存: 42.09 MB ← 内存未释放
+    no_shrink_test.go:50: 新建 map 后堆内存: 0.67 MB ← 旧 map 被 GC 回收
+--- PASS: TestMapNoShrink (0.12s)
+```
+
+填充 100 万条数据占用 42 MB，删除全部后仍占用 42 MB，直到创建新 map 替换旧 map 后才释放。
+
+这意味着如果 map 曾经存储过大量数据后又大量删除，空桶占用的内存不会归还。生产环境中常见的场景：
+- 缓存热点数据过期后大量删除
+- 临时聚合任务结束后清空 map
+
+解决方案：当 map 经历"大量写入后大量删除"的场景时，应创建新 map 并迁移存活数据，让旧 map 被 GC 回收：
+
+```go
+// 不要这样做
+for k := range oldMap {
+    delete(oldMap, k) // bucket 内存不会释放
+}
+
+// 应该这样做
+newMap := make(map[K]V, len(survivingKeys))
+for _, k := range survivingKeys {
+    newMap[k] = oldMap[k]
+}
+oldMap = newMap // 旧 map 整体被 GC 回收
+```
+
+注意：测量 map 内存时需使用 `runtime.KeepAlive(m)` 防止 GC 在 `ReadMemStats` 之前提前回收 map 的内部存储。
