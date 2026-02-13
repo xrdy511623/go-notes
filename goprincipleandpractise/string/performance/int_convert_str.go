@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+var convertSink []string
+
 func ConvertIntToStringSprint(s []int) []string {
 	n := len(s)
 	strSlice := make([]string, n)
@@ -34,7 +36,8 @@ func GenerateSlice(n int) []int {
 
 func BenchmarkConvert(b *testing.B, f func([]int) []string) {
 	s := GenerateSlice(10000)
-	for i := 0; i < b.N; i++ {
-		f(s)
+	b.ResetTimer()
+	for b.Loop() {
+		convertSink = f(s)
 	}
 }

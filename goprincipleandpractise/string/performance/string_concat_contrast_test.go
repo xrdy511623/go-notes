@@ -25,13 +25,13 @@ string.Builder 也提供了预分配内存的方式 Grow
 内存消耗减半。
 */
 
-func BenchmarkPlusConcat(b *testing.B)       { Benchmark(b, PlusConcat) }
-func BenchmarkSprintfConcat(b *testing.B)    { Benchmark(b, SprintfConcat) }
-func BenchmarkBuilderConcat(b *testing.B)    { Benchmark(b, BuilderConcat) }
-func BenchmarkBufferConcat(b *testing.B)     { Benchmark(b, BufferConcat) }
-func BenchmarkByteConcat(b *testing.B)       { Benchmark(b, ByteConcat) }
-func BenchmarkPreByteConcat(b *testing.B)    { Benchmark(b, PreByteConcat) }
-func BenchmarkPreBuilderConcat(b *testing.B) { Benchmark(b, PreBuilderConcat) }
+func BenchmarkPlusConcat(b *testing.B)       { benchmarkConcat(b, PlusConcat) }
+func BenchmarkSprintfConcat(b *testing.B)    { benchmarkConcat(b, SprintfConcat) }
+func BenchmarkBuilderConcat(b *testing.B)    { benchmarkConcat(b, BuilderConcat) }
+func BenchmarkBufferConcat(b *testing.B)     { benchmarkConcat(b, BufferConcat) }
+func BenchmarkByteConcat(b *testing.B)       { benchmarkConcat(b, ByteConcat) }
+func BenchmarkPreByteConcat(b *testing.B)    { benchmarkConcat(b, PreByteConcat) }
+func BenchmarkPreBuilderConcat(b *testing.B) { benchmarkConcat(b, PreBuilderConcat) }
 
 func TestBuilderConcat(t *testing.T) {
 	var str = RandomString(10)

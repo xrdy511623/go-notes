@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+var concatSink string
+
 // 为了避免编译器优化，首先实现一个生成长度为 n 的随机字符串的函数。
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -80,9 +82,10 @@ func PreBuilderConcat(n int, str string) string {
 	return builder.String()
 }
 
-func Benchmark(b *testing.B, f func(int, string) string) {
+func benchmarkConcat(b *testing.B, f func(int, string) string) {
 	var str = RandomString(10)
-	for i := 0; i < b.N; i++ {
-		f(10000, str)
+	b.ResetTimer()
+	for b.Loop() {
+		concatSink = f(10000, str)
 	}
 }

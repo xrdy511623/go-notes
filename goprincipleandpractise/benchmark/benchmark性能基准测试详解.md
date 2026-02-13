@@ -11,10 +11,25 @@ benchmark性能基准测试详解
 b.N表示循环执行的次数，而N值不用程序员特别关心，N值是动态调整的，直到可靠地计算出程序执行时间后才会停止，具体
 执行次数会在执行结束后打印出来。
 
+**注意：benchmark 函数体内必须按 `b.N` 或 `b.Loop()` 循环执行待测逻辑。**
+如果只调用一次待测函数，结果会失真，不能反映真实吞吐。
+
+```go
+// 错误写法：只执行一次
+func BenchmarkFib(b *testing.B) { Fib(50) }
+
+// 正确写法（Go 1.24+）
+func BenchmarkFib(b *testing.B) {
+    for b.Loop() {
+        Fib(50)
+    }
+}
+```
+
 go test 命令默认是不运行 benchmark 用例的，如果我们想运行 benchmark 用例，则需要加上 -bench 参数。例如：
 
 ```shell
-$ go test -bench .
+$ go test -bench=. .
 goos: darwin
 goarch: amd64
 pkg: example
@@ -166,7 +181,7 @@ func BenchmarkGenerate1000000(b *testing.B) { benchmarkGenerate(1000000, b) }
 这里，我们实现一个辅助函数 benchmarkGenerate 允许传入参数 i，并构造了 4 个不同输入的 benchmark 用例。运行结果如下：
 
 ```shell
-$ go test -bench .                                                       
+$ go test -bench=. .                                                       
 goos: darwin
 goarch: amd64
 pkg: example
@@ -211,7 +226,7 @@ go test -bench=. -benchmem -count=10 > old.txt
 修改代码后运行第二次基准测试（new version）
 
 ```shell
-go test -bench=. -benchmem -count=10 > old.txt
+go test -bench=. -benchmem -count=10 > new.txt
 ```
 
 用 benchstat 对比两个结果

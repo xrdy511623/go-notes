@@ -1,6 +1,6 @@
 package benchmark
 
-// Fib 递归调用求斐波拉契数，其中有大量重复计算，时间复杂度O(N^2), 空间复杂度O(N)
+// Fib 递归调用求斐波拉契数，其中有大量重复计算，时间复杂度约 O(2^N), 空间复杂度 O(N)
 func Fib(n int) int {
 	if n < 2 {
 		return n
