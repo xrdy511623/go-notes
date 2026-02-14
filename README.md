@@ -11,6 +11,7 @@
 
 - [项目定位](#项目定位)
 - [内容总览](#内容总览)
+- [快速开始](#快速开始)
 - [阅读路径建议](#阅读路径建议)
 - [知识地图](#知识地图)
 - [仓库结构](#仓库结构)
@@ -33,13 +34,42 @@
 
 | 模块 | Markdown | Go 文件 | 图片 |
 | --- | ---: | ---: | ---: |
-| `goprincipleandpractise` | 27 | 69 | 101 |
+| `goprincipleandpractise` | 27 | 117 | 103 |
 | `middlewares` | 32 | 0 | 186 |
 | `designpattern` | 0 | 10 | 0 |
 | `enhancelinuxperformance` | 35 | 0 | 102 |
-| `productivetools` | 10 | 0 | 197 |
+| `productivetools` | 11 | 0 | 197 |
 | `shellscripts` | 6 | 0 | 2 |
 | `softskill` | 1 | 0 | 8 |
+
+## 快速开始
+
+### 运行环境
+
+- Go: `1.24.0`（见 `go.mod`）
+
+### 常用命令
+
+```bash
+# 安装依赖
+go mod download
+
+# 运行并发专题性能测试
+go test ./goprincipleandpractise/channel/performance
+go test ./goprincipleandpractise/context/performance
+
+# 运行 fuzzing 示例（当前可通过的子包）
+go test ./goprincipleandpractise/fuzzingtest/byteparser \
+  ./goprincipleandpractise/fuzzingtest/multiparam \
+  ./goprincipleandpractise/fuzzingtest/roundtrip \
+  ./goprincipleandpractise/fuzzingtest/differential
+
+# 运行指定 Fuzz 目标（示例）
+go test -run=^$ -fuzz=^FuzzParseAge$ -fuzztime=30s ./goprincipleandpractise/fuzzingtest
+
+# 复现 ParseAge 示例中的已知边界问题（预期失败）
+go test -run=^FuzzParseAge$ ./goprincipleandpractise/fuzzingtest
+```
 
 ## 阅读路径建议
 
@@ -71,8 +101,10 @@
 - `goprincipleandpractise/channel/channel详解.md`
 - `goprincipleandpractise/map/map详解.md`
 - `goprincipleandpractise/slice/切片详解.md`
-- `goprincipleandpractise/string/字符串拼接背后的原理.md`
+- `goprincipleandpractise/string/详解go语言中的string.md`
 - `goprincipleandpractise/lock/go语言中的锁详解.md`
+- `goprincipleandpractise/context/context详解.md`
+- `goprincipleandpractise/fuzzingtest/详解go语言中的fuzzing.md`
 - `goprincipleandpractise/sync/errgroup源码分析.md`
 
 ### 中间件
@@ -144,6 +176,7 @@ go-notes/
 ## 维护与更新
 
 - 文档 Owner：john.q
+- CI workflows：`Not found in repo`（未发现 `.github/workflows`）
 
 维护策略：
 1. 代码示例变化时同步更新相关文档和图片。

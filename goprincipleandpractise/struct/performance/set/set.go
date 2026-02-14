@@ -1,9 +1,11 @@
 package set
 
-import (
-	"strconv"
-	"testing"
-)
+import "strconv"
+
+// map[string]bool vs map[string]struct{} 作为 Set 的性能对比
+//
+// 空结构体 struct{} 占 0 字节，bool 占 1 字节。
+// 当 map 元素数量很大时，value 的内存差异会体现在总内存占用上。
 
 type Set interface {
 	Has(string) bool
@@ -41,17 +43,13 @@ func (s boolSet) Delete(key string) {
 	delete(s, key)
 }
 
-func UseSet(n int, s Set) {
-	for i := 0; i < n; i++ {
-		s.Add(strconv.Itoa(i))
-		if s.Has(strconv.Itoa(i)) {
-			s.Delete(strconv.Itoa(i))
+// RunSetBenchmark 对 Set 执行 n 次 Add+Has+Delete 操作
+func RunSetBenchmark(n int, s Set) {
+	for i := range n {
+		key := strconv.Itoa(i)
+		s.Add(key)
+		if s.Has(key) {
+			s.Delete(key)
 		}
-	}
-}
-
-func Benchmark(b *testing.B, n int, s Set) {
-	for i := 0; i < b.N; i++ {
-		UseSet(n, s)
 	}
 }
