@@ -1,0 +1,13 @@
+=== User Report ===
+Total Users: 3
+-------------------
+[1] ID: 1
+    Name:  Alice
+    Email: alice@example.com
+[2] ID: 2
+    Name:  Bob
+    Email: bob@example.com
+[3] ID: 3
+    Name:  Charlie
+    Email: charlie@example.com
+=== End Report ===

@@ -83,6 +83,9 @@ func TestGetMaxOnlineTime(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		// Go 1.22+ 每次迭代创建新的循环变量，不再需要 tc := tc。
+		// 旧版 Go 中若配合 t.Parallel() 使用，必须写 tc := tc 捕获变量。
+		// 详见 trap/loop-capture/ 和 parallel_test.go。
 		t.Run(tc.name, func(t *testing.T) {
 			result := getMaxOnlineTime(tc.users)
 			if result != tc.expected {
