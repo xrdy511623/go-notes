@@ -36,8 +36,8 @@ type Uncomparable struct {
 
 // UncomparableMap 包含 map 字段，不可比较
 type UncomparableMap struct {
+	Labels map[string]string
 	Name   string
-	Labels map[string]string // map 不可比较
 }
 
 func main() {

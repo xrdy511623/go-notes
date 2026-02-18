@@ -4,9 +4,9 @@ import "fmt"
 
 // StructA 包含指针 (string 内部有指针)
 type StructA struct {
-	ID   int
-	Name string // 指针类型
+	Name string
 	Data [10]int
+	ID   int
 }
 
 // StructB 不含指针

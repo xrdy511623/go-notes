@@ -18,18 +18,18 @@ type Product struct {
 
 // Coupon 表示优惠券
 type Coupon struct {
+	ExpiresAt time.Time
 	Code      string
-	Discount  float64   // 折扣金额
-	MinAmount float64   // 最低消费金额
-	ExpiresAt time.Time // 过期时间
-	Used      bool      // 是否已使用
+	Discount  float64
+	MinAmount float64
+	Used      bool
 }
 
 // Order 表示订单
 type Order struct {
 	ID         string
-	Items      []OrderItem
 	CouponCode string
+	Items      []OrderItem
 	Total      float64
 }
 

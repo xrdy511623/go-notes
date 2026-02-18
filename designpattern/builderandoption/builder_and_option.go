@@ -4,10 +4,10 @@ import "net/http"
 
 // Config 结构体用于从远程HTTP拉取配置
 type Config struct {
-	apiKey  string // 鉴权key
 	client  *http.Client
-	timeout int
+	apiKey  string
 	cluster string
+	timeout int
 }
 
 // Option 是函数选项类型，用于设置Config的属性

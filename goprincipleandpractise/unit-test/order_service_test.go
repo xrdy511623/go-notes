@@ -41,8 +41,8 @@ func (s *stubCouponRepo) GetByCode(code string) (*Coupon, error) {
 }
 
 type stubOrderRepo struct {
-	saved []*Order
 	err   error
+	saved []*Order
 }
 
 func (s *stubOrderRepo) Save(order *Order) error {
@@ -54,8 +54,8 @@ func (s *stubOrderRepo) Save(order *Order) error {
 }
 
 type stubNotifier struct {
-	sent []string
 	err  error
+	sent []string
 }
 
 func (s *stubNotifier) SendOrderConfirmation(orderID string) error {
@@ -70,10 +70,10 @@ func (s *stubNotifier) SendOrderConfirmation(orderID string) error {
 
 func TestOrderService_ValidateStock(t *testing.T) {
 	tests := []struct {
-		name     string
-		products map[string]*Product
-		items    []OrderItem
 		wantErr  error
+		products map[string]*Product
+		name     string
+		items    []OrderItem
 	}{
 		{
 			name: "库存充足",
@@ -143,12 +143,12 @@ func TestOrderService_ApplyCoupon(t *testing.T) {
 	past := time.Now().Add(-24 * time.Hour)
 
 	tests := []struct {
-		name     string
+		wantErr  error
 		coupons  map[string]*Coupon
+		name     string
 		code     string
 		subtotal float64
 		want     float64
-		wantErr  error
 	}{
 		{
 			name:     "无优惠券",

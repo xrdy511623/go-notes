@@ -21,11 +21,11 @@ import (
 
 func TestUserService_GetUser(t *testing.T) {
 	tests := []struct {
-		name    string
-		store   *StubUserStore
-		userID  string
-		want    *User
 		wantErr error
+		store   *StubUserStore
+		want    *User
+		name    string
+		userID  string
 	}{
 		{
 			name: "成功获取用户",
@@ -88,11 +88,11 @@ func TestUserService_GetUser(t *testing.T) {
 
 func TestUserService_CreateUser(t *testing.T) {
 	tests := []struct {
-		name    string
+		wantErr error
 		store   *StubUserStore
+		name    string
 		inName  string
 		inEmail string
-		wantErr error
 	}{
 		{
 			name: "成功创建",

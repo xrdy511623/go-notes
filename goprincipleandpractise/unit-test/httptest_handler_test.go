@@ -17,12 +17,12 @@ import (
 
 func TestGetUser_Recorder(t *testing.T) {
 	tests := []struct {
-		name       string
 		store      *StubUserStore
+		name       string
 		query      string
 		method     string
+		wantBody   string
 		wantStatus int
-		wantBody   string // 部分匹配
 	}{
 		{
 			name: "成功获取用户",
@@ -147,12 +147,12 @@ func TestGetUser_Server(t *testing.T) {
 
 func TestCreateUser_Recorder(t *testing.T) {
 	tests := []struct {
-		name       string
 		store      *StubUserStore
+		name       string
 		method     string
 		body       string
-		wantStatus int
 		wantBody   string
+		wantStatus int
 	}{
 		{
 			name: "成功创建用户",

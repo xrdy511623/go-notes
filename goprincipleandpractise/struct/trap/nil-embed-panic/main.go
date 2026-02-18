@@ -35,8 +35,8 @@ type Outer struct {
 
 // SafeOuter 嵌入 Inner（值类型）
 type SafeOuter struct {
-	Inner // 值类型嵌入，零值安全
-	Name  string
+	Name string
+	Inner
 }
 
 func main() {

@@ -23,10 +23,10 @@ func CreateValueChain(depth int) (context.Context, benchKey) {
 // RequestMeta 将所有 request-scoped 数据打包到一个结构体中
 type RequestMeta struct {
 	TraceID   string
-	UserID    int64
 	TenantID  string
 	RequestID string
 	Locale    string
+	UserID    int64
 }
 
 type requestMetaKey struct{}

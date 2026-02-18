@@ -12,9 +12,9 @@ import (
 
 // Message 表示解析后的协议消息
 type Message struct {
+	Payload []byte
 	Version uint8
 	Command uint8
-	Payload []byte
 }
 
 // ParseMessage 解析二进制协议消息

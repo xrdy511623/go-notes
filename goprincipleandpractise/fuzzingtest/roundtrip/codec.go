@@ -13,9 +13,9 @@ import (
 
 // Record 表示一条简单记录
 type Record struct {
-	Type  uint8
 	Name  string
 	Score int32
+	Type  uint8
 }
 
 const headerSize = 1 + 2 + 4 // type + nameLen + score

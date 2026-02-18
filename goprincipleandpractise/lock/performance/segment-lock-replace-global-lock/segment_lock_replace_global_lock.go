@@ -10,8 +10,8 @@ type Map interface {
 }
 
 type LockedMap struct {
-	m       sync.RWMutex
 	buckets map[string]string
+	m       sync.RWMutex
 }
 
 func NewLockedMap() Map {

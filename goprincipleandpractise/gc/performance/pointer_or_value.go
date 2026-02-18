@@ -1,9 +1,9 @@
 package performance
 
 type Person struct {
+	name string
 	id   int
 	age  int
-	name string
 }
 
 type Item struct {

@@ -26,17 +26,13 @@ all its dependents are notified and updated automatically.
 */
 
 type Subscriber struct {
-	// 订阅者唯一标识
-	Id int
-	// 用于接收消息的通道
 	Channel chan string
+	Id      int
 }
 
 type Publisher struct {
-	// 互斥锁，保护订阅者列表
+	Subs  []Subscriber
 	Mutex sync.Mutex
-	// 订阅者列表
-	Subs []Subscriber
 }
 
 // NewPublisher 创建一个新的发布者

@@ -73,8 +73,8 @@ type requestMetaKey struct{} // 不可导出，其他包无法构造相同的 ke
 
 type RequestMeta struct {
 	TraceID string
-	UserID  int64
 	Locale  string
+	UserID  int64
 }
 
 func demoCorrectPattern() {

@@ -16,9 +16,9 @@ type order struct {
 }
 
 type disOrder struct {
-	a int8
 	c int32
 	b int16
+	a int8
 }
 
 // UseOrderStruct 分配并遍历对齐良好的 struct 切片
