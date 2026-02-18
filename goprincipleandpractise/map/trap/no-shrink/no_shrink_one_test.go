@@ -16,10 +16,10 @@ map 的 bucket 内存只增不减：delete 操作仅清除 key/value 并标记 t
 go test -run TestMapNoShrink -v
 === RUN   TestMapNoShrink
 
-	no_shrink_test.go:23: 空 map 堆内存: 0.59 MB
-	no_shrink_test.go:29: 填充 100w 后堆内存: 42.98 MB
-	no_shrink_test.go:39: 删除全部后堆内存: 42.99 MB ← 内存未释放
-	no_shrink_test.go:50: 新建 map 后堆内存: 0.59 MB ← 旧 map 被 GC 回收
+	no_shrink_one_test.go:23: 空 map 堆内存: 0.64 MB
+	no_shrink_one_test.go:29: 填充 100w 后堆内存: 42.69 MB
+	no_shrink_one_test.go:39: 删除全部后堆内存: 42.69 MB ← 内存未释放
+	no_shrink_one_test.go:50: 新建 map 后堆内存: 0.64 MB ← 旧 map 被 GC 回收
 
 --- PASS: TestMapNoShrink (0.13s)
 PASS
@@ -57,6 +57,7 @@ func TestMapNoShrink(t *testing.T) {
 	afterNew := heapMB()
 	runtime.KeepAlive(m)
 	t.Logf("新建 map 后堆内存: %.2f MB ← 旧 map 被 GC 回收", afterNew)
+
 }
 
 func heapMB() float64 {

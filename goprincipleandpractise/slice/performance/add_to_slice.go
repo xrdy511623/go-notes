@@ -1,7 +1,7 @@
 package performance
 
 /*
-测试结果参考 images 目录下的 slice-performance.png。
+测试结果参考 images 目录下的 slice-performance.png（截图只作示例，以本机实测为准）。
 
 通过 benchmark 对比可以看到，从 Append -> AppendAllocated -> AppendIndexed，
 单次操作分配次数和内存占用通常会下降。
@@ -11,8 +11,9 @@ package performance
 1. 对切片预先分配内存通常可以提升性能；
 2. 最终长度已知且无需过滤时，index 赋值通常优于 append。
 
-BenchmarkAppendLoop-10          1000000000               0.6290 ns/op          6 B/op          0 allocs/op
-BenchmarkAppendSpread-10        1000000000               0.1634 ns/op          1 B/op          0 allocs/op
+建议运行以下命令获取当前环境的真实数据：
+go test -bench='^Benchmark(Append|AppendAllocated|AppendIndexed|AppendLoop|AppendSpread)$' -benchmem .
+
 如果不需要过滤切片，直接将一个切片里的元素全部拷贝到另一个切片里，可以使用 ... 展开，通常更高效。
 */
 
@@ -94,10 +95,13 @@ func GenerateSlice(n int) []int {
 }
 
 /*
-测试结果参考 images 目录下的 slice_bce.png。
+测试结果参考 images 目录下的 slice_bce.png（截图只作示例，以本机实测为准）。
 
 BCE 这类写法在特定场景下可能更优：在循环前先做一次边界检查，编译器可能消除循环内重复的 bounds check。
 是否生效取决于代码形态和编译器优化结果，应以实际 benchmark 为准。
+
+建议运行：
+go test -bench='^Benchmark(NormalCase|BceCase)$' -benchmem .
 
 结论：如果能确定访问边界，可尝试 BCE 写法减少边界检查开销。
 */

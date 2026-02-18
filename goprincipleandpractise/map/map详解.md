@@ -600,9 +600,9 @@ key 和 value 的位置就会改变，之前保存的地址也就失效了。
 
 map 深度相等的条件：
 
-1、都为 nil
-2、非空、长度相等，指向同一个 map 实体对象
-3、相应的 key 指向的 value “深度”相等
+- 都为 nil
+- 非空、长度相等，指向同一个 map 实体对象
+- 相应的 key 指向的 value “深度”相等
 
 所谓深度相等，需要使用reflect.DeepEqual
 直接将使用 map1 == map2 是错误的。这种写法只能比较 map 是否为 nil。
@@ -926,15 +926,15 @@ fmt.Println(m) // map[1:a 3:c]
 
 delete 操作只清除 key/value 并将 tophash 标记为 empty，**不会释放底层 bucket 数组的内存**。即使删除全部元素，已分配的 bucket 内存仍然保留。
 
-实验代码见 `trap/no-shrink/no_shrink_test.go`，测试结果如下：
+实验代码见 `trap/no-shrink/no_shrink_one_test.go`，测试结果如下：
 
 ```shell
 go test -run TestMapNoShrink -v
 === RUN   TestMapNoShrink
-    no_shrink_test.go:23: 空 map 堆内存: 0.70 MB
-    no_shrink_test.go:29: 填充 100w 后堆内存: 42.08 MB
-    no_shrink_test.go:39: 删除全部后堆内存: 42.09 MB ← 内存未释放
-    no_shrink_test.go:50: 新建 map 后堆内存: 0.67 MB ← 旧 map 被 GC 回收
+    no_shrink_one_test.go:23: 空 map 堆内存: 0.70 MB
+    no_shrink_one_test.go:29: 填充 100w 后堆内存: 42.08 MB
+    no_shrink_one_test.go:39: 删除全部后堆内存: 42.09 MB ← 内存未释放
+    no_shrink_one_test.go:50: 新建 map 后堆内存: 0.67 MB ← 旧 map 被 GC 回收
 --- PASS: TestMapNoShrink (0.12s)
 ```
 

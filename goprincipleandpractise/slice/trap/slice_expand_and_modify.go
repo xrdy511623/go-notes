@@ -125,6 +125,5 @@ func main() {
 	SliceRiseTwo(s7)
 	// []int{1, 2} []int{2, 3, 4}
 	fmt.Println(s6, s7)
-
 	VerifySliceExpand()
 }

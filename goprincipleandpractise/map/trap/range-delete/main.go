@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 /*
 Go 语言规范明确保证：range 遍历 map 的过程中 delete 是安全的。

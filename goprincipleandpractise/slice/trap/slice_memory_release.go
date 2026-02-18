@@ -3,7 +3,6 @@ package main
 import (
 	"math/rand"
 	"runtime"
-	"testing"
 )
 
 var rng = rand.New(rand.NewSource(1))
@@ -16,13 +15,6 @@ func generateWithCap(capacity int) []int {
 	return nums
 }
 
-func printMem(t *testing.T) {
-	t.Helper()
-	var rtm runtime.MemStats
-	runtime.ReadMemStats(&rtm)
-	t.Logf("%.2f MB", float64(rtm.Alloc)/1024./1024.)
-}
-
 func GetLastBySlice(origin []int) []int {
 	return origin[len(origin)-2:]
 }
@@ -33,14 +25,29 @@ func GetLastByCopy(origin []int) []int {
 	return result
 }
 
-func testGetLast(t *testing.T, f func([]int) []int) {
-	result := make([][]int, 0, 100)
-	for k := 0; k < 100; k++ {
-		origin := generateWithCap(128 * 1024)
-		result = append(result, f(origin))
-		// 如果显示开启GC，两者内存占用的差距会更加明显
-		// runtime.GC()
+func currentAllocBytes() uint64 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return m.Alloc
+}
+
+func measureRetainedBytes(rounds, capacity int, f func([]int) []int) uint64 {
+	results := make([][]int, 0, rounds)
+
+	runtime.GC()
+	before := currentAllocBytes()
+
+	for k := 0; k < rounds; k++ {
+		origin := generateWithCap(capacity)
+		results = append(results, f(origin))
 	}
-	printMem(t)
-	_ = result
+
+	runtime.GC()
+	after := currentAllocBytes()
+	runtime.KeepAlive(results)
+
+	if after <= before {
+		return 0
+	}
+	return after - before
 }
