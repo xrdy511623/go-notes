@@ -19,7 +19,7 @@ Go 官方明确建议：不要将 Context 存储在结构体中，应作为函�
   3. 同一个结构体可能在不同请求中复用，但 context 应该是 per-request 的
 */
 
-// 错误做法：将 context 存储在结构体中
+// BadService 错误做法：将 context 存储在结构体中
 type BadService struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -40,7 +40,7 @@ func (s *BadService) Do() error {
 	}
 }
 
-// 正确做法：context 作为方法参数
+// GoodService 正确做法：context 作为方法参数
 type GoodService struct {
 	name string
 }

@@ -217,12 +217,12 @@ DefaultServeMux.Handle 是一个非常简单的 map 实现，key 是路径（pat
 
 如果觉得层次比较多，对照着思维导图多看几遍就顺畅了。这里整理了一下逻辑线各层的关键结论：
 
-第一层，标准库创建 HTTP 服务是通过创建一个 Server 数据结构完成的；
-第二层，Server 数据结构在 for 循环中不断监听每一个连接；
-第三层，每个连接默认开启一个 Goroutine 为其服务；
-第四、五层，serverHandler 结构代表请求对应的处理逻辑，并且通过这个结构进行具体业务逻辑处理；
-第六层，Server 数据结构如果没有设置处理函数 Handler，默认使用 DefaultServerMux 处理请求；
-第七层，DefaultServerMux 是使用 map 结构来存储和查找路由规则。
+- 第一层，标准库创建 HTTP 服务是通过创建一个 Server 数据结构完成的；
+- 第二层，Server 数据结构在 for 循环中不断监听每一个连接；
+- 第三层，每个连接默认开启一个 Goroutine 为其服务；
+- 第四、五层，serverHandler 结构代表请求对应的处理逻辑，并且通过这个结构进行具体业务逻辑处理；
+- 第六层，Server 数据结构如果没有设置处理函数 Handler，默认使用 DefaultServerMux 处理请求；
+- 第七层，DefaultServerMux 是使用 map 结构来存储和查找路由规则。
 
 **创建框架的 Server 结构**
 
