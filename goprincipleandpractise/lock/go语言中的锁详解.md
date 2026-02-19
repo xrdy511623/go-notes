@@ -491,7 +491,7 @@ go tool pprof mutex.prof
 
 # 7 Mutex 内部实现原理
 
-> 详见 [../sync/Mutex互斥锁实现原理.md](../sync/Mutex互斥锁实现原理.md)
+> 详见 [../sync/Mutex互斥锁实现原理.md](../sync/sync.Mutex互斥锁实现原理.md)
 
 这里概括关键点：
 
