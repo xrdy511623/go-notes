@@ -12,9 +12,9 @@ sync.Pool 是 Go 标准库提供的临时对象池，用于缓存已分配但暂
 降低 GC 压力。它的典型使用场景包括 buffer 复用、编解码器复用等高频分配场景。
 
 其核心特性包括：
-并发安全：多个 goroutine 可以同时调用 Get 和 Put，无需额外加锁。
-临时性：Pool 中的对象可能在任何时候被 GC 清除，不保证持久性。
-高性能：热路径上无锁操作，避免了锁竞争带来的开销。
+- 并发安全：多个 goroutine 可以同时调用 Get 和 Put，无需额外加锁。
+- 临时性：Pool 中的对象可能在任何时候被 GC 清除，不保证持久性。
+- 高性能：热路径上无锁操作，避免了锁竞争带来的开销。
 
 
 # 2 sync.Pool的源码结构
@@ -36,9 +36,9 @@ type Pool struct {
 ```
 
 关键字段：
-local：per-P 的本地缓存数组，每个 P 有自己独立的 poolLocal，热路径上无锁。
-victim：上一轮 GC 周期的 local 副本，用于平滑 GC 清理的冲击（victim cache 机制）。
-New：用户提供的工厂函数，当池中无可用对象时调用。
+- local：per-P 的本地缓存数组，每个 P 有自己独立的 poolLocal，热路径上无锁。
+- victim：上一轮 GC 周期的 local 副本，用于平滑 GC 清理的冲击（victim cache 机制）。
+- New：用户提供的工厂函数，当池中无可用对象时调用。
 
 ## 2.2 per-P 本地存储
 
@@ -57,9 +57,9 @@ type poolLocalInternal struct {
 ```
 
 每个 P 拥有一个 poolLocal，包含两个存储位置：
-private：私有槽位，只有当前 P 能访问，存取都是直接赋值，零同步开销。
-shared：共享双端队列，当前 P 从头部操作（无锁），其他 P 从尾部偷取（CAS 操作）。
-pad：填充字段，确保不同 P 的 poolLocal 不会落在同一个 CPU 缓存行上，避免 false sharing。
+- private：私有槽位，只有当前 P 能访问，存取都是直接赋值，零同步开销。
+- shared：共享双端队列，当前 P 从头部操作（无锁），其他 P 从尾部偷取（CAS 操作）。
+- pad：填充字段，确保不同 P 的 poolLocal 不会落在同一个 CPU 缓存行上，避免 false sharing。
 
 
 # 3 Put 的实现
@@ -413,10 +413,10 @@ p2 := p1  // go vet: assignment copies lock value
 
 sync.Pool 的实现精妙地结合了多层缓存和无锁并发设计：
 
-per-P 本地缓存：通过 pin 绑定 P + private 槽位，热路径上零竞争、零同步开销。
-无锁双端队列：poolDequeue 实现单生产者多消费者的无锁环形队列，poolChain 提供动态扩容。
-work-stealing：本地缓存耗尽时从其他 P 偷取，通过 CAS 操作避免锁竞争。
-victim cache：GC 时不直接清空，而是降级到 victim，给对象一个额外的 GC 周期被复用的机会。
+- per-P 本地缓存：通过 pin 绑定 P + private 槽位，热路径上零竞争、零同步开销。
+- 无锁双端队列：poolDequeue 实现单生产者多消费者的无锁环形队列，poolChain 提供动态扩容。
+- work-stealing：本地缓存耗尽时从其他 P 偷取，通过 CAS 操作避免锁竞争。
+- victim cache：GC 时不直接清空，而是降级到 victim，给对象一个额外的 GC 周期被复用的机会。
 
 整体设计思路是：在绝大多数情况下（本地 Get/Put）做到零开销，只在少数情况下（跨 P 偷取、GC 清理）
-付出有限的同步代价。这与 Go 运行时调度器的 per-P 架构一脉相承，体现了"数据分区消除竞争"的核心理念。
+付出有限地同步代价。这与 Go 运行时调度器的 per-P 架构一脉相承，体现了"数据分区消除竞争"的核心理念。

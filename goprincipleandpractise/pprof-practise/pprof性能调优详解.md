@@ -393,78 +393,10 @@ ThreadCreate  stop the world ---> 遍历allm链表 ---> 输出创建m的堆栈 -
 采样争抢锁的次数和耗时
 采样率:只记录固定比例的锁操作，1为每次加锁均记录。
 
-# 4 go tool trace —— pprof 的互补工具
 
-pprof 告诉你"哪里慢"，trace 告诉你"为什么慢"。两者互补，缺一不可。
+# 4 pprof 进阶用法
 
-## 4.1 采集与查看
-
-```bash
-# 方式一：通过 HTTP 端点采集（适合运行中的服务）
-curl -o trace.out "http://localhost:6060/debug/pprof/trace?seconds=5"
-go tool trace trace.out
-
-# 方式二：在代码中手动采集
-# 见 performance/trace_demo_test.go
-```
-
-## 4.2 trace 能看到而 pprof 看不到的
-
-| 维度 | pprof | trace |
-|------|-------|-------|
-| CPU 耗时 | 函数级别采样统计 | 时间线上每个事件的精确时间戳 |
-| GC 影响 | 只能看到 GC 函数的 CPU 占比 | 能看到 STW 暂停在时间线上的精确位置和持续时间 |
-| 调度延迟 | 看不到 | 能看到 goroutine 等待被调度的时间 |
-| 系统调用 | 看不到 | 能看到每次 syscall 的阻塞时间 |
-| 并行度 | 看不到 | 能看到每个 P 上 goroutine 的执行时间线 |
-
-## 4.3 trace 视图详解
-
-打开 `go tool trace` 后，浏览器会显示以下视图：
-
-**Goroutines analysis**
-按 goroutine 分组，展示每个 goroutine 的生命周期：创建、运行、等待、阻塞、GC 辅助。
-
-**Network/Sync/Syscall blocking profile**
-分别展示网络 I/O、同步原语、系统调用造成的阻塞耗时排行。
-
-**Scheduler latency profile**
-展示 goroutine 从"就绪"到"运行"的调度延迟分布，可以发现 P 不够用或 GOMAXPROCS 设置不合理的问题。
-
-**User-defined tasks & regions**
-通过 `runtime/trace` 包自定义标记：
-
-```go
-import "runtime/trace"
-
-// 标记一个任务（跨多个 goroutine）
-ctx, task := trace.NewTask(ctx, "processOrder")
-defer task.End()
-
-// 标记一个代码区间
-trace.WithRegion(ctx, "validateInput", func() {
-    // ...
-})
-```
-
-自定义标记在 trace 视图中会高亮显示，便于在海量事件中快速定位关注的业务逻辑。
-
-## 4.4 实际使用场景
-
-**场景一：GC 导致的延迟毛刺**
-pprof 只能告诉你 GC 占了多少 CPU，trace 能精确告诉你"某次请求在第 3ms 处被 STW 暂停了 200μs"。
-
-**场景二：goroutine 调度饥饿**
-某些 goroutine 长时间得不到调度（被计算密集的 goroutine 抢占），pprof 无法发现，trace 能清晰展示。
-
-**场景三：并行度不足**
-程序有 8 个 P，但 trace 显示大部分时间只有 2 个 P 在工作，说明并行化不够或存在锁瓶颈。
-
-完整示例见 `performance/trace_demo_test.go`。
-
-# 5 pprof 进阶用法
-
-## 5.1 对比分析（-base / -diff_base）
+## 4.1 对比分析（-base / -diff_base）
 
 在生产环境中，对比优化前后的 profile 是验证效果的最可靠方式：
 
@@ -490,7 +422,7 @@ go tool pprof -base before.prof after.prof
 go tool pprof -http=:8089 -diff_base before.prof after.prof
 ```
 
-## 5.2 Benchmark + pprof 联动
+## 4.2 Benchmark + pprof 联动
 
 不需要启动 HTTP 服务，直接从 benchmark 生成 profile 文件：
 
@@ -513,9 +445,9 @@ go test -bench=BenchmarkFoo -trace=trace.out ./...
 go tool trace trace.out
 ```
 
-完整示例见 `performance/benchmark_pprof_test.go`。
+> 完整示例见 [performance/benchmark_pprof_test.go](performance/benchmark_pprof_test.go)
 
-## 5.3 逃逸分析与 pprof 联动
+## 4.3 逃逸分析与 pprof 联动
 
 当 pprof 的 heap profile 发现某函数 alloc 过多时，用逃逸分析定位原因：
 
@@ -533,7 +465,7 @@ go build -gcflags='-m -m' ./...        # 二级详细输出，包含逃逸原因
 # 常见优化：返回值类型而非指针、避免 interface{} 装箱、预分配切片
 ```
 
-## 5.4 火焰图高级用法
+## 4.4 火焰图高级用法
 
 前面 2.2 节展示了 goroutine 火焰图，这里补充更多视图模式：
 
@@ -561,7 +493,7 @@ go tool pprof -http=:8089 cpu.prof
 # 浏览器中可在 VIEW 菜单切换：Top / Graph / Flame Graph / Source
 ```
 
-## 5.5 runtime/pprof 手动采集
+## 4.5 runtime/pprof 手动采集
 
 在非 HTTP 服务的场景（如 CLI 工具、批处理任务），使用 `runtime/pprof` 手动采集：
 
@@ -580,7 +512,7 @@ pprof.WriteHeapProfile(f2)
 f2.Close()
 ```
 
-## 5.6 自定义采样率
+## 4.6 自定义采样率
 
 ```go
 // CPU 采样率（默认 100Hz，一般不需要改）
@@ -599,9 +531,9 @@ runtime.SetBlockProfileRate(1000)  // 阻塞超过 1000ns 才记录
 
 注意：生产环境中不建议将采样率设置为 1，开销过大。建议仅在排查问题时临时调高。
 
-# 6 内存泄漏实战排查
+# 5 内存泄漏实战排查
 
-## 6.1 排查模式
+## 5.1 排查模式
 
 内存泄漏的特征：`inuse_space` 随时间持续增长，即使负载稳定。
 
@@ -616,7 +548,7 @@ go tool pprof -inuse_space -base heap1.prof heap2.prof
 (pprof) top  # 增长最多的函数就是泄漏嫌疑
 ```
 
-## 6.2 常见泄漏场景
+## 5.2 常见泄漏场景
 
 **goroutine 泄漏**（最常见）
 ```go
@@ -677,7 +609,7 @@ func getHeader(data []byte) []byte {
 }
 ```
 
-## 6.3 自动化监控
+## 5.3 自动化监控
 
 在生产环境中，建议定期采集 profile 并持久化，便于事后分析：
 
@@ -704,7 +636,7 @@ go func() {
 对于更成熟的方案，可以使用持续性能分析平台（Continuous Profiling），如 Pyroscope、Parca 或
 Google Cloud Profiler，它们能自动采集、存储和可视化 profile 数据，支持跨时间维度的对比分析。
 
-# 7 pprof 实战 checklist
+# 6 pprof 实战 checklist
 
 日常性能排查时，按照以下顺序逐项检查：
 
