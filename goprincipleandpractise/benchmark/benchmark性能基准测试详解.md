@@ -365,3 +365,151 @@ BenchmarkBubbleSort-8                  9         113280509 ns/op
 PASS
 ok      example 1.146s
 ```
+
+## 3.3 b.ReportAllocs
+
+除了使用命令行的 `-benchmem` 参数外，也可以在代码中调用 `b.ReportAllocs()`，效果等同，好处是不依赖运行时传参，
+适合团队统一规范：
+
+```golang
+func BenchmarkMarshal(b *testing.B) {
+	b.ReportAllocs()
+	data := &User{Name: "Alice", Age: 30}
+	for i := 0; i < b.N; i++ {
+		json.Marshal(data)
+	}
+}
+```
+
+# 4 子基准测试 (b.Run)
+
+使用 `b.Run` 可以在一个 Benchmark 函数中创建多个子基准测试，类似于单元测试中的 `t.Run`。
+相比第 2.3 节中为每个输入规模手写独立函数的方式，`b.Run` 更加灵活简洁：
+
+```golang
+func BenchmarkGenerate(b *testing.B) {
+	sizes := []int{1000, 10000, 100000, 1000000}
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("size=%d", size), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				generate(size)
+			}
+		})
+	}
+}
+```
+
+运行结果会自动带上子测试名称：
+```shell
+BenchmarkGenerate/size=1000-8          34048         34643 ns/op
+BenchmarkGenerate/size=10000-8          4070        295642 ns/op
+BenchmarkGenerate/size=100000-8          403       3230415 ns/op
+BenchmarkGenerate/size=1000000-8          39      32083701 ns/op
+```
+
+可以用正则只运行特定的子测试：
+```shell
+go test -bench='BenchmarkGenerate/size=10000' .
+```
+
+**优势**
+- 代码更简洁，不需要为每个输入规模写独立的函数。
+- 输出结果层次清晰，自动以 `/` 分隔父子关系。
+- 便于通过正则过滤运行特定的子测试。
+
+
+# 5 并行基准测试 (b.RunParallel)
+
+`b.RunParallel` 用于测试并发场景下的性能，它会启动多个 goroutine 并行执行基准测试。
+适用于测试锁竞争、并发安全的数据结构、连接池等场景。
+
+```golang
+func BenchmarkConcurrentMap(b *testing.B) {
+	m := sync.Map{}
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			m.Store(i, i)
+			i++
+		}
+	})
+}
+```
+
+与普通 benchmark 的对比：
+```golang
+// 串行测试：衡量单线程性能
+func BenchmarkMutexSerial(b *testing.B) {
+	var mu sync.Mutex
+	var count int
+	for i := 0; i < b.N; i++ {
+		mu.Lock()
+		count++
+		mu.Unlock()
+	}
+}
+
+// 并行测试：衡量多核竞争下的性能
+func BenchmarkMutexParallel(b *testing.B) {
+	var mu sync.Mutex
+	var count int
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			mu.Lock()
+			count++
+			mu.Unlock()
+		}
+	})
+}
+```
+
+可以结合 `-cpu` 参数观察不同并发度下的性能变化：
+```shell
+go test -bench='Parallel' -cpu=1,2,4,8 .
+```
+
+
+# 6 从 benchmark 生成性能剖析文件
+
+benchmark 可以直接生成 pprof 剖析文件，便于定位热点函数和内存瓶颈。
+
+**生成 CPU 剖析**
+```shell
+go test -bench=. -cpuprofile=cpu.out
+go tool pprof cpu.out
+```
+
+**生成内存剖析**
+```shell
+go test -bench=. -memprofile=mem.out
+go tool pprof mem.out
+```
+
+**在 pprof 交互模式中常用命令**
+```shell
+(pprof) top10          # 查看耗时/内存占用前10的函数
+(pprof) list funcName  # 查看指定函数的逐行分析
+(pprof) web            # 生成调用图（需要安装graphviz）
+```
+
+这是将 benchmark 和 pprof 结合使用的标准工作流：先通过 benchmark 发现性能问题，再通过 pprof 定位到具体的代码行。
+
+
+# 7 小结
+
+| 功能 | 命令/API | 使用场景 |
+|------|----------|----------|
+| 基础运行 | `go test -bench=.` | 运行所有基准测试 |
+| 内存统计 | `-benchmem` 或 `b.ReportAllocs()` | 查看内存分配情况 |
+| 提升准确度 | `-benchtime=5s -count=10` | 获取统计可靠的结果 |
+| 结果对比 | `benchstat old.txt new.txt` | 验证优化效果 |
+| 排除初始化 | `b.ResetTimer()` | 跳过耗时的准备工作 |
+| 每轮排除 | `b.StopTimer()` / `b.StartTimer()` | 每次迭代排除非测试逻辑 |
+| 子基准测试 | `b.Run(name, func)` | 组织多组输入的测试 |
+| 并行测试 | `b.RunParallel(func)` | 测试并发竞争场景 |
+| 性能剖析 | `-cpuprofile` / `-memprofile` | 定位热点函数 |
+
+**最佳实践**
+- 始终使用 `-benchmem`，内存分配次数往往比 CPU 耗时更能反映真实性能瓶颈。
+- 使用 `-count=10` 并配合 `benchstat` 分析，避免因噪声得出错误结论。
+- 先 benchmark 发现问题，再 pprof 定位根因，最后 benchstat 验证优化效果。

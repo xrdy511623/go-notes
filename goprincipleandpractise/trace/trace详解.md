@@ -121,7 +121,6 @@ Go 为在应用中启用 Tracer 并收集追踪数据提供了三种主要方法
 这是最直接也最灵活的方式，允许你在代码的任意位置精确控制追踪的开始和结束。下面是一个典型的示例：
 
 ```go
-// ch29/tracing/manual_trace_start_stop/main.go
 package main
 
 import (
