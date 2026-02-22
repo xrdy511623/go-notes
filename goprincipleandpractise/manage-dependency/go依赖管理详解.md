@@ -119,9 +119,9 @@ github.com/uber/jaeger-client-go v2.29.1+incompatible
 Go 1.11实验性引入的，所以这项规则提出之前已经有一些仓库打上了2或者更高版本的tag了，为了兼容这部分仓库，对于没有使用go.mod
 文件并且主版本在2或者以上的依赖，会在版本号后加上+incompatible后缀。
 
-normal-go-mod.png
+![normal-go-mod.png](images%2Fnormal-go-mod.png)
 
-incompatible-no-go-mod.png
+![incompatible-no-go-mod.png](images%2Fincompatible-no-go-mod.png)
 
 **什么情况下会出现 +incompatible**
 未使用 Go Modules 的旧库：
@@ -155,6 +155,8 @@ incompatible-no-go-mod.png
 ```go
 module github.com/uber/jaeger-client-go/v2
 ```
+
+Go Module 内部使用 **MVS（Minimal Version Selection，最小版本选择）** 算法来决定最终使用的依赖版本：在所有满足约束的版本中，选择能满足所有依赖方需求的**最低**版本，而非最新版本。这使得构建结果确定且可复现。
 
 如果X项目依赖了A、B两个项目，且A、B分别依赖了C项目的v1.3、V1.4两个版本，最终编译时所使用的C项目的版本是?
 A v1.3
@@ -252,3 +254,132 @@ git commit提交代码前尽量执行下go mod tidy，减少构建时无效依�
 公共库被迫replace掉依赖C，且所有依赖该基础库的服务都需要更新依赖，尽管C的那个有问题的版本已经不再被A、B依赖。
 
 **经验: 公共库之间应该分工明确，避免大杂烩，避免循环依赖。**
+
+
+# 3 go.sum 与安全校验
+
+go.mod 描述的是"要用哪个版本"，而 **go.sum 记录的是"这个版本的内容是否被篡改"**。
+
+go.sum 中的每一行形如：
+```
+github.com/gin-gonic/gin v1.9.1 h1:4idEAncQnU5cB7BeOkPtxjfCSye0AAm1R0RVIqJ+Jmg=
+github.com/gin-gonic/gin v1.9.1/go.mod h1:hPrL7YrpYKXt5YId3A/Tnip5kqbEAP+KLuI3SUcPTeU=
+```
+- 第一列：模块路径和版本
+- `h1:` 后面：该版本 zip 包的 SHA-256 哈希值
+- `/go.mod` 行：go.mod 文件本身的哈希值
+
+**go.sum 的作用**
+- 每次下载依赖时，Go 工具链会验证下载内容的哈希是否与 go.sum 中记录的一致。
+- 防止依赖被悄悄替换（供应链攻击）。
+- 应当提交到版本控制系统，保证团队所有人、CI 构建使用完全相同的依赖内容。
+
+**GONOSUMCHECK 与 GONOSUMDB**
+
+Go 维护了一个公共的 checksum 数据库 `sum.golang.org`，用于二次验证哈希值。对于私有模块，不应将代码信息发送到公共 checksum 数据库：
+
+```shell
+# 跳过指定模块的 checksum 校验（逗号分隔，支持通配符）
+GONOSUMDB=*.internal.company.com,github.com/company/*
+
+# 同时控制 GOPROXY 和 GONOSUMDB
+GOPRIVATE=*.internal.company.com
+```
+
+`GOPRIVATE` 是 `GONOSUMDB` 和 `GONOPROXY` 的组合简写，配置后该模式匹配的模块会绕过代理和 checksum 数据库，直接访问源站。
+
+
+# 4 go.mod 进阶指令
+
+除了 `require`，go.mod 还支持以下指令：
+
+## 4.1 replace
+
+将某个依赖替换为另一个版本或本地路径，常用于：
+- 临时使用 fork 版本修复 bug
+- 本地调试修改依赖库
+- 解决 2.4.4 中删除 tag 的问题
+
+```go
+replace (
+    // 替换为另一个版本
+    github.com/foo/bar v1.2.0 => github.com/myfork/bar v1.2.1
+
+    // 替换为本地路径（本地调试时常用）
+    github.com/foo/bar v1.2.0 => ../bar
+)
+```
+
+注意：`replace` 只对当前模块生效，不会传递给上游依赖方。
+
+## 4.2 exclude
+
+明确排除某个版本，Go 工具链在解析依赖时会跳过该版本，选择下一个可用版本：
+
+```go
+exclude (
+    github.com/foo/bar v1.2.3  // 该版本有严重 bug，禁止使用
+)
+```
+
+## 4.3 retract（Go 1.16+）
+
+供模块**作者**使用，标记已发布版本中有问题的版本，提醒使用者升级：
+
+```go
+retract (
+    v1.3.0         // 该版本存在数据竞争问题
+    [v1.4.0, v1.4.5]  // 该区间内所有版本存在安全漏洞
+)
+```
+
+与 `exclude` 的区别：`retract` 是作者在自己模块中声明，`exclude` 是使用者在自己模块中声明。
+
+
+# 5 go work 工作区（Go 1.18+）
+
+在同时开发多个相关模块时（例如主项目 + 正在修改的依赖库），过去只能用 `replace` 临时指向本地路径，且容易误提交。Go 1.18 引入了 **workspace 模式**，通过 `go.work` 文件优雅地解决这个问题。
+
+```shell
+# 在多模块的父目录下初始化 workspace
+go work init ./myapp ./mylib
+
+# 添加更多模块到 workspace
+go work use ./another-module
+```
+
+生成的 `go.work` 文件：
+```
+go 1.21
+
+use (
+    ./myapp
+    ./mylib
+)
+```
+
+workspace 生效后，`myapp` 对 `mylib` 的引用会优先使用本地路径，无需修改任何 `go.mod`。
+
+**注意：`go.work` 不应提交到版本控制系统**，它是开发者本地的临时配置（加入 `.gitignore`）。
+
+
+# 6 常用命令速查
+
+| 命令 | 作用 |
+|------|------|
+| `go mod init <module>` | 初始化模块，生成 go.mod |
+| `go mod tidy` | 增加缺失依赖，删除无用依赖，更新 go.sum |
+| `go mod download` | 下载所有依赖到本地缓存（`$GOPATH/pkg/mod`）|
+| `go mod vendor` | 将依赖复制到项目 vendor 目录（用于离线构建）|
+| `go mod verify` | 验证本地缓存的依赖是否与 go.sum 一致 |
+| `go mod graph` | 打印完整的依赖图 |
+| `go mod why <pkg>` | 解释为什么需要某个依赖 |
+| `go get <pkg>@<version>` | 添加/升级/降级依赖到指定版本 |
+| `go get <pkg>@none` | 从 go.mod 中移除某个依赖 |
+| `go list -m all` | 列出所有直接和间接依赖 |
+
+**提交代码前的清单**
+- `go mod tidy` 确保 go.mod / go.sum 整洁
+- 将 go.mod 和 go.sum **都提交**到版本控制
+- 不要提交 go.work（本地工作区配置）
+- 如无必要，不使用 `go get -u`（会连带升级间接依赖）

@@ -343,74 +343,93 @@ Codis 集群本身的开发复杂度。
 员⼿⼯操作，负载压⼒不⼤，所以，它们的可靠性可以不⽤额外进⾏保证了。
 
 
-# 3 切⽚集群⽅案选择建议
+# 3 Codis 不支持的命令
 
-到这⾥， Codis 和 Redis Cluster 这两种切⽚集群⽅案我们就学完了，我
-把它们的区别总结在了⼀张表⾥，你可以对⽐看下。
+Codis server 基于 Redis 3.2.8 二次开发，并非所有 Redis 命令都被支持。不支持的命令主要分为以下几类：
 
+| 类别 | 不支持的命令 | 原因 |
+|------|------------|------|
+| **跨 key 阻塞操作** | `BLPOP`、`BRPOP`、`BRPOPLPUSH` | 多个 key 可能分布在不同 server 上，proxy 无法跨节点阻塞 |
+| **位运算跨 key** | `BITOP` | 需要对多个 key 做位运算，可能跨节点 |
+| **事务** | `MULTI`、`EXEC`、`DISCARD`、`WATCH` | 事务中的多条命令可能涉及不同 server，proxy 无法保证原子性 |
+| **Lua 脚本** | `EVAL`、`EVALSHA`（部分支持） | 脚本中访问的 key 可能分布在不同 server 上 |
+| **发布订阅** | `SUBSCRIBE`、`PUBLISH`（部分支持） | 跨 proxy 的消息传递不被保证 |
+| **集群管理** | `CLUSTER *` 系列命令 | Codis 有自己的集群管理机制 |
+| **新版本特性** | Redis 4.0+ 的 `MEMORY`、`UNLINK`、Stream 等 | Codis 基于 3.2.8，不包含后续版本特性 |
 
-
-
-
-![codis-vs-cluster.png](images%2Fcodis-vs-cluster.png)
-
-
-
-
-
-最后，在实际应⽤的时候，对于这两种⽅案，我们该怎么选择呢？
-
-1. 从稳定性和成熟度来看， Codis 应⽤得⽐较早，在业界已经有了
-   成熟的⽣产部署。虽然 Codis 引⼊了 proxy 和 Zookeeper，增
-   加了集群复杂度，但是， proxy 的⽆状态设计和 Zookeeper ⾃
-   身的稳定性，也给 Codis 的稳定使⽤提供了保证。⽽ Redis
-   Cluster 的推出时间晚于 Codis，相对来说，成熟度要弱于
-   Codis，如果你想选择⼀个成熟稳定的⽅案， Codis 更加合适
-   些。
-
-2. 从业务应⽤客户端兼容性来看，连接单实例的客户端可以直接连
-   接 codis proxy，⽽原本连接单实例的客户端要想连接 Redis
-   Cluster 的话，就需要开发新功能。所以，如果你的业务应⽤中
-   ⼤量使⽤了单实例的客户端，⽽现在想应⽤切⽚集群的话，建议
-   你选择 Codis，这样可以避免修改业务应⽤中的客户端。
-
-3. 从使⽤ Redis 新命令和新特性来看， Codis server 是基于开源
-   的 Redis 3.2.8 开发的，所以， Codis 并不⽀持 Redis 后续的开
-   源版本中的新增命令和数据类型。另外， Codis 并没有实现开源
-   Redis 版本的所有命令，⽐如 BITOP、 BLPOP、 BRPOP，以及
-   和与事务相关的 MUTLI、 EXEC 等命令。 Codis 官⽹上列出了
-   不被⽀持的命令列表，你在使⽤时记得去核查⼀下。所以，如果
-   你想使⽤开源 Redis 版本的新特性， Redis Cluster 是⼀个合适
-   的选择。
-
-4. 从数据迁移性能维度来看， Codis 能⽀持异步迁移，异步迁移对
-   集群处理正常请求的性能影响要⽐使⽤同步迁移的⼩。所以，如
-   果你在应⽤集群时，数据迁移⽐较频繁的话， Codis 是个更合适
-   的选择。
+> **重要提示**：使用 Codis 前，务必对照官方的不支持命令列表逐一核查业务中使用的 Redis 命令，避免上线后出现兼容性问题。
 
 
-# 4 小结
+# 4 Proxy 高可用与负载均衡
 
-本节学习了 Redis 切⽚集群的 Codis ⽅案。 Codis 集群包含
-codis server、 codis proxy、 Zookeeper、 codis dashboard 和 codis fe
-这四⼤类组件。我们再来回顾下它们的主要功能。
+codis proxy 是无状态的——它不保存任何数据，路由表从 Zookeeper 动态获取。这意味着 proxy 可以随意添加或移除，也可以在故障后直接重启恢复。
 
-• codis proxy 和 codis server 负责处理数据读写请求，其中，
-codis proxy 和客户端连接，接收请求，并转发请求给 codis
-server，⽽ codis server 负责具体处理请求。
+但在生产环境中，通常需要部署**多个 proxy** 并在它们之间做负载均衡，常见方案如下：
 
-• codis dashboard 和 codis fe 负责集群管理，其中， codis
-dashboard 执⾏管理操作，⽽ codis fe 提供 Web 管理界⾯。
+| 方案 | 特点 | 适用场景 |
+|------|------|---------|
+| **LVS/HAProxy** | 四层负载均衡，性能高，支持健康检查 | 大规模生产环境首选 |
+| **DNS 轮询** | 实现简单，但故障切换慢 | 小规模或开发测试环境 |
+| **客户端直连 Zookeeper** | 客户端从 ZK 获取 proxy 列表自行负载均衡 | 对延迟敏感的场景 |
+| **Nginx stream** | 支持四层代理，配置灵活 | 已有 Nginx 基础设施的场景 |
 
-• Zookeeper 集群负责保存集群的所有元数据信息，包括路由表、
-proxy 实例信息等。这⾥，有个地⽅需要你注意，除了使⽤
-Zookeeper， Codis 还可以使⽤ etcd 或本地⽂件系统保存元数据
-信息。
+一个典型的生产部署架构：
 
-关于 Codis 和 Redis Cluster 的选型考虑，我从稳定性成熟度、客户端兼
-容性、 Redis 新特性使⽤以及数据迁移性能四个⽅⾯提供了建议。
+```
+Client → LVS/HAProxy (VIP)
+           ├── codis-proxy-1
+           ├── codis-proxy-2
+           └── codis-proxy-3
+                  ↓
+           codis server groups (主从)
+```
 
-最后，再提供⼀个 Codis 使⽤上的⼩建议：当你有多条业务线要使⽤ Codis 时，
-可以启动多个 codis dashboard，每个 dashboard 管理⼀部分 codis server，
-同时，再⽤⼀个 dashboard 对应负责⼀个业务线的集群管理，这样，就可以做到⽤
-⼀个 Codis 集群实现多条业务线的隔离管理了。
+
+# 5 Codis 与 Redis Cluster 对比
+
+| 对比维度 | Codis | Redis Cluster |
+|---------|-------|---------------|
+| **架构** | proxy 中心化代理 | 去中心化，节点直连 |
+| **数据路由** | proxy 查询路由表转发 | 客户端计算 + MOVED/ASK 重定向 |
+| **槽数量** | 1024 | 16384 |
+| **哈希算法** | CRC32 | CRC16 |
+| **元数据存储** | Zookeeper / etcd | 节点间 Gossip 传播 |
+| **客户端兼容性** | 原生客户端直连 proxy，无需修改 | 需要 Smart Client 支持 |
+| **数据迁移** | 支持同步和异步迁移 | 仅同步迁移（MIGRATE 命令） |
+| **Redis 版本** | 基于 3.2.8，不支持新版本特性 | 随官方版本同步更新 |
+| **运维管理** | Web UI (codis fe)，操作直观 | 命令行工具 (redis-cli --cluster) |
+| **高可用** | 依赖哨兵做主从切换 | 内置 PFAIL→FAIL 故障转移 |
+| **额外依赖** | Zookeeper / etcd | 无 |
+| **项目维护** | 已停止维护（最后更新约 2020 年） | 官方持续维护 |
+
+
+# 6 选型建议
+
+| 考量因素 | 选 Codis | 选 Redis Cluster |
+|---------|---------|-----------------|
+| 客户端兼容性 | 大量已有单实例客户端，不想改代码 | 可以使用 Smart Client（go-redis、Jedis 等均已支持） |
+| Redis 新特性 | 不需要 Redis 4.0+ 的新命令和数据类型 | 需要 Stream、Module 等新特性 |
+| 数据迁移频率 | 频繁扩缩容，需要异步迁移降低影响 | 迁移不频繁，同步迁移可接受 |
+| 运维复杂度 | 能接受额外维护 Zookeeper + proxy | 希望架构简单，减少组件数量 |
+| 长期演进 | 存量系统维护，短期不打算升级 | 新项目或需要长期跟进官方版本 |
+
+> **现状说明**：Codis 项目（GitHub: CodisLabs/codis）自 2020 年左右已停止活跃维护，最新版本基于 Redis 3.2.8。对于**新项目**，强烈建议直接使用 **Redis Cluster**，它随着 Redis 版本持续演进，社区活跃，主流客户端（go-redis、Jedis、Lettuce、redis-py）都已内置完善的 Cluster 支持。Codis 更适合那些已经在使用且运行稳定的**存量系统**。
+
+
+# 7 小结
+
+| 主题 | 核心要点 |
+|------|---------|
+| 架构组成 | codis server（数据处理）+ codis proxy（请求转发）+ Zookeeper/etcd（元数据）+ dashboard/fe（管理） |
+| 数据分布 | CRC32(key) % 1024 映射到 Slot，Slot 按 server group 粒度分配 |
+| 数据迁移 | 同步迁移（简单但阻塞）和异步迁移（bigkey 拆分指令 + 临时过期保证原子性） |
+| 客户端兼容 | proxy 兼容 RESP 协议，原生客户端无需修改 |
+| 可靠性 | server group（主从 + 哨兵）、proxy 无状态可横向扩展、Zookeeper 保证元数据可靠 |
+| 项目现状 | 已停止维护，新项目建议使用 Redis Cluster |
+
+**生产实践要点**：
+
+1. **多业务线隔离**：启动多个 codis dashboard，每个 dashboard 管理一部分 codis server group，对应一条业务线
+2. **proxy 前置负载均衡**：生产环境中 proxy 前面应部署 LVS/HAProxy，避免单 proxy 成为瓶颈
+3. **核查不支持命令**：上线前务必对照 Codis 官方不支持命令列表检查业务代码
+4. **元数据存储选择**：除 Zookeeper 外，Codis 也支持 etcd 和本地文件系统作为元数据存储

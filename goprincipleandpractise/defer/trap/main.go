@@ -1,8 +1,6 @@
 package main
 
-import (
-	"fmt"
-)
+import "fmt"
 
 func df1() int {
 	x := 5
@@ -55,7 +53,7 @@ func df5() (x int) {
 }
 
 /*
-第一步，返回值赋值x=5,第二步defer语句执行，此时内部这个匿名函数修改的是自己内部的函数变量x，与外部函数df6的变量x无关，所以最后返回的还是5
+第一步，返回值赋值x=5,第二步defer语句执行，此时内部这个匿名函数修改的是自己内部的函数变量x，与外部函数df5的变量x无关，所以最后返回的还是5
 所以最后return返回的就是x=5
 */
 
@@ -107,6 +105,51 @@ func calc(index string, a, b int) int {
 	return ret
 }
 
+func f1() int {
+	var i int
+	defer func() {
+		i++
+	}()
+	return 1
+}
+
+func f2() int {
+	var i int
+	defer func() {
+		i++
+	}()
+	return i
+}
+
+func f3() (ret int) {
+	defer func() {
+		ret++
+	}()
+	return 0
+}
+
+func f4() {
+	i := 0
+	defer fmt.Println(i)
+	i++
+}
+
+func f5() {
+	i := 0
+	defer func() {
+		fmt.Println(i)
+	}()
+	i++
+}
+
+func f6() {
+	i := 0
+	defer func(i int) {
+		fmt.Println(i)
+	}(i)
+	i++
+}
+
 func main() {
 	fmt.Println(df1())
 	fmt.Println(df2())
@@ -135,4 +178,10 @@ func main() {
 		"BB", 10, 12, 22
 		"AA", 1, 3, 4
 	*/
+	fmt.Println(f1())
+	fmt.Println(f2())
+	fmt.Println(f3())
+	f4()
+	f5()
+	f6()
 }

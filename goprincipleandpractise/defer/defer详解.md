@@ -11,9 +11,9 @@ defer详解
 在Go语言的函数中return语句在底层并不是原子操作，它分为给返回值赋值和RET指令两步。而defer语句执行的时机就在返回值
 赋值操作后，RET指令执行前。
 也就是:
-> 返回值=x
-> 执行defer语句
-> ret指令返回x
+- 返回值=x
+- 执行defer语句
+- ret指令返回x
 
 # 3 行为规则
 
@@ -26,7 +26,7 @@ func a() {
 }
 ```
 
-defer语句中的fmt.Println()参数i的值在defer出现时就已经确定了，实际上是复制了一份。之后对变量i的修改不会影响fmt.Printtln()
+defer语句中的fmt.Println()参数i的值在defer出现时就已经确定了，实际上是复制了一份。之后对变量i的修改不会影响fmt.Println()
 函数的执行，仍然打印0.
 注意: 对于指针类型参数，此规则仍然适用，只不过延迟函数的参数是一个地址值，在这种情况下，defer后面的语句对变量的修改可能会影响
 延迟函数。
@@ -48,7 +48,7 @@ a 主函数拥有匿名返回值，返回字面值。
 譬如:
 
 ```golang
-func foo() {
+func foo() int {
 	var i int
 	defer func() {
 		i++
@@ -62,7 +62,7 @@ b 主函数拥有匿名返回值，返回变量
 譬如:
 
 ```golang
-func foo() {
+func foo() int {
 	var i int
 	defer func() {
 		i++
@@ -85,10 +85,11 @@ c 主函数拥有具名返回值
 譬如:
 ```golang
 func foo() (ret int) {
-	defer func() {
-		ret++
-    }()  
-	return 0
+    defer func () {
+        ret++
+    }()
+    return 0
+}
 ```
 
 则上面的返回语句可以拆分为以下过程:
