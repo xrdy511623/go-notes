@@ -43,7 +43,7 @@ b.Age = 30   // 不影响 a
 
 这意味着：
 - 函数内修改参数不影响调用者（除非传指针）
-- 小 struct 可以安全地在 goroutine 间传递（天然并发安全）
+- 小 struct 传值通常更易隔离状态；但这不等于天然并发安全。若字段包含 slice/map/指针等共享可变引用，仍可能发生并发问题
 - 大 struct 频繁传递时应使用指针避免拷贝开销
 
 > 性能基准 → [performance/value-vs-pointer](performance/value-vs-pointer/value_vs_pointer_test.go)

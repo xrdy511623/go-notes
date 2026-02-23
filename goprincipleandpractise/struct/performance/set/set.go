@@ -1,7 +1,5 @@
 package set
 
-import "strconv"
-
 // map[string]bool vs map[string]struct{} 作为 Set 的性能对比
 //
 // 空结构体 struct{} 占 0 字节，bool 占 1 字节。
@@ -43,13 +41,16 @@ func (s boolSet) Delete(key string) {
 	delete(s, key)
 }
 
-// RunSetBenchmark 对 Set 执行 n 次 Add+Has+Delete 操作
-func RunSetBenchmark(n int, s Set) {
-	for i := range n {
-		key := strconv.Itoa(i)
+// RunSetBenchmark 对 Set 执行批量 Add + Has + Delete 操作。
+// keys 应由调用方提前生成，避免把 key 构造成本混入基准热路径。
+func RunSetBenchmark(keys []string, s Set) {
+	for _, key := range keys {
 		s.Add(key)
-		if s.Has(key) {
-			s.Delete(key)
-		}
+	}
+	for _, key := range keys {
+		_ = s.Has(key)
+	}
+	for _, key := range keys {
+		s.Delete(key)
 	}
 }

@@ -241,3 +241,300 @@ type Server struct {
 ```
 其中最核心的是 Handler 这个字段，从主流程中我们知道（第六层关键结论），当 Handler 这个字段设置为空的时候，它会默认
 使用 DefaultServerMux 这个路由器来填充这个值，但是我们一般都会使用自己定义的路由来替换这个默认路由。
+
+
+# 3 Handler接口
+
+Handler接口是整个net/http设计的灵魂，只有一个方法：
+
+```go
+type Handler interface {
+    ServeHTTP(ResponseWriter, *Request)
+}
+```
+
+任何实现了`ServeHTTP`方法的类型都可以作为Handler。标准库围绕这个接口构建了整个请求处理体系。
+
+## 3.1 HandlerFunc适配器
+
+标准库提供了一个巧妙的类型适配器，让普通函数也能作为Handler使用：
+
+```go
+type HandlerFunc func(ResponseWriter, *Request)
+
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
+    f(w, r)
+}
+```
+
+这就是为什么`http.HandleFunc`能直接接收一个函数：
+
+```go
+// 这两种写法等价
+http.Handle("/foo", http.HandlerFunc(fooFunc))
+http.HandleFunc("/foo", fooFunc)
+```
+
+`HandlerFunc`是一个函数类型，同时实现了Handler接口——这是Go中接口适配的经典模式。
+
+
+# 4 路由匹配规则
+
+## 4.1 DefaultServeMux的匹配规则
+
+DefaultServeMux的路由匹配遵循**最长前缀匹配**原则：
+
+```go
+mux := http.NewServeMux()
+mux.HandleFunc("/",          rootHandler)    // 匹配所有未被其他规则匹配的路径
+mux.HandleFunc("/api/",      apiHandler)     // 匹配 /api/ 开头的所有路径
+mux.HandleFunc("/api/users", usersHandler)   // 精确匹配 /api/users
+```
+
+关键规则：
+- 以`/`结尾的pattern是**前缀匹配**（如`/api/`匹配`/api/xxx`）
+- 不以`/`结尾的pattern是**精确匹配**（如`/api/users`只匹配`/api/users`）
+- 多个pattern都匹配时，选择**最长**的那个
+- `/`匹配所有未被其他规则捕获的路径（兜底路由）
+
+## 4.2 Go 1.22增强路由
+
+Go 1.22 对ServeMux进行了重大增强，支持了HTTP方法匹配和路径参数：
+
+```go
+mux := http.NewServeMux()
+
+// 方法匹配：只匹配GET请求
+mux.HandleFunc("GET /api/users", listUsers)
+
+// 路径参数：{name}捕获路径段
+mux.HandleFunc("GET /api/users/{id}", getUser)
+
+// 通配符：{path...}捕获剩余路径
+mux.HandleFunc("GET /files/{path...}", serveFile)
+```
+
+在handler中提取路径参数：
+
+```go
+func getUser(w http.ResponseWriter, r *http.Request) {
+    id := r.PathValue("id")
+    fmt.Fprintf(w, "User ID: %s", id)
+}
+```
+
+这一增强使得许多简单场景不再需要第三方路由库（如gorilla/mux、chi）。
+
+## 4.3 匹配优先级（Go 1.22+）
+
+Go 1.22 的路由匹配有明确的优先级规则：
+
+1. **更具体的pattern优先**：`/api/users/{id}`优先于`/api/{path...}`
+2. **带方法的pattern优先**：`GET /api/users`优先于`/api/users`
+3. **两个pattern冲突时**（互相不比对方更具体），注册时会panic
+
+
+# 5 中间件模式
+
+由于Handler只是一个接口，我们可以通过**函数包装**实现中间件链——这是net/http最强大的设计之一。
+
+## 5.1 中间件的基本形式
+
+中间件本质是一个接收Handler并返回Handler的函数：
+
+```go
+func loggingMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        next.ServeHTTP(w, r)
+        log.Printf("%s %s %v", r.Method, r.URL.Path, time.Since(start))
+    })
+}
+
+func authMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        token := r.Header.Get("Authorization")
+        if token == "" {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return  // 不调用next，中断链条
+        }
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+## 5.2 中间件组合
+
+多个中间件可以链式组合：
+
+```go
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET /api/users", listUsers)
+
+    // 手动嵌套
+    handler := loggingMiddleware(authMiddleware(mux))
+
+    http.ListenAndServe(":8080", handler)
+}
+```
+
+如果中间件较多，可以用一个辅助函数来链式调用：
+
+```go
+func Chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+    for i := len(middlewares) - 1; i >= 0; i-- {
+        h = middlewares[i](h)
+    }
+    return h
+}
+
+// 使用
+handler := Chain(mux, loggingMiddleware, authMiddleware, recoveryMiddleware)
+```
+
+请求的执行顺序：`loggingMiddleware → authMiddleware → recoveryMiddleware → mux`。
+
+
+# 6 生产环境必备配置
+
+## 6.1 超时设置
+
+裸启`http.ListenAndServe`在生产环境是危险的——没有任何超时限制，慢客户端可以耗尽服务器资源。
+必须显式配置超时：
+
+```go
+server := &http.Server{
+    Addr:         ":8080",
+    Handler:      mux,
+    ReadTimeout:  5 * time.Second,   // 读取整个请求（含body）的超时
+    WriteTimeout: 10 * time.Second,  // 写入响应的超时
+    IdleTimeout:  120 * time.Second, // keep-alive连接的空闲超时
+}
+
+log.Fatal(server.ListenAndServe())
+```
+
+各超时字段的含义：
+
+| 字段 | 覆盖阶段 | 推荐值 |
+|------|---------|-------|
+| `ReadTimeout` | 从连接建立到读完请求body | 5-30s |
+| `ReadHeaderTimeout` | 从连接建立到读完请求header | 5s |
+| `WriteTimeout` | 从读完请求到写完响应 | 10-60s |
+| `IdleTimeout` | keep-alive连接的空闲时间 | 60-120s |
+
+## 6.2 优雅关闭
+
+直接kill进程会中断正在处理的请求。`Server.Shutdown()`可以优雅关闭：
+停止接收新请求，等待已有请求处理完成后再退出。
+
+```go
+func main() {
+    server := &http.Server{
+        Addr:    ":8080",
+        Handler: mux,
+    }
+
+    // 在单独的goroutine中启动服务
+    go func() {
+        if err := server.ListenAndServe(); err != http.ErrServerClosed {
+            log.Fatalf("listen error: %v", err)
+        }
+    }()
+
+    // 等待中断信号
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+
+    log.Println("shutting down...")
+
+    // 给正在处理的请求最多30秒完成
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    if err := server.Shutdown(ctx); err != nil {
+        log.Fatalf("shutdown error: %v", err)
+    }
+    log.Println("server stopped")
+}
+```
+
+## 6.3 请求中的Context
+
+每个`*http.Request`都携带一个`context.Context`，可用于：
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+
+    // 1. 检测客户端是否断开
+    select {
+    case <-ctx.Done():
+        // 客户端已断开，无需继续处理
+        return
+    default:
+    }
+
+    // 2. 传递给下游调用，实现超时控制
+    result, err := queryDB(ctx, "SELECT ...")
+
+    // 3. 传递请求级别的值（如认证信息）
+    userID := ctx.Value("userID").(string)
+}
+```
+
+当客户端断开连接时，请求的context会自动取消，下游通过`ctx.Done()`感知到取消信号后及时释放资源。
+
+
+# 7 HTTP客户端
+
+main.go中展示了最基本的HTTP客户端用法，但在生产环境中需要注意以下几点：
+
+## 7.1 不要使用默认Client
+
+`http.Get()`使用的是`http.DefaultClient`，它**没有超时设置**，可能导致请求永远阻塞：
+
+```go
+// 危险：没有超时
+resp, err := http.Get(url)
+
+// 正确：创建带超时的Client
+client := &http.Client{
+    Timeout: 10 * time.Second,
+}
+resp, err := client.Get(url)
+```
+
+## 7.2 复用Client
+
+`http.Client`内部维护了连接池（通过`Transport`），应该在全局创建一次并复用，
+而不是每次请求都创建新的Client：
+
+```go
+// 全局复用，而非每次请求创建
+var client = &http.Client{
+    Timeout: 10 * time.Second,
+    Transport: &http.Transport{
+        MaxIdleConns:        100,
+        MaxIdleConnsPerHost: 10,
+        IdleConnTimeout:     90 * time.Second,
+    },
+}
+```
+
+## 7.3 务必关闭Body
+
+响应的Body必须读取并关闭，否则底层TCP连接无法被复用：
+
+```go
+resp, err := client.Get(url)
+if err != nil {
+    return err
+}
+defer resp.Body.Close()
+
+// 即使不需要body内容，也要读取并丢弃
+io.Copy(io.Discard, resp.Body)
+```

@@ -22,7 +22,7 @@ ok      go-notes/goprincipleandpractise/struct/performance/mem-align    24.077s
 
 对比维度:
   - order (16 字节): 字段按对齐倍数从小到大排列，无浪费
-  - disOrder (24 字节): 字段交错排列，多 4 字节 padding
+  - disOrder (24 字节): 字段交错排列，多 8 字节 padding
 
 结论:
   - disOrder 比 order 多占 50% 内存 (24 vs 16 字节)
