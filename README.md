@@ -34,8 +34,8 @@
 
 | 模块 | Markdown | Go 文件 | 图片 |
 | --- | ---: | ---: | ---: |
-| `goprincipleandpractise` | 27 | 117 | 103 |
-| `middlewares` | 32 | 0 | 186 |
+| `goprincipleandpractise` | 35 | 194 | 128 |
+| `middlewares` | 33 | 0 | 194 |
 | `designpattern` | 0 | 10 | 0 |
 | `enhancelinuxperformance` | 35 | 0 | 102 |
 | `productivetools` | 11 | 0 | 197 |
@@ -58,6 +58,13 @@ go mod download
 go test ./goprincipleandpractise/channel/performance
 go test ./goprincipleandpractise/context/performance
 
+# 运行新增专题示例测试
+go test ./goprincipleandpractise/concurrency/pattern \
+  ./goprincipleandpractise/concurrency/performance \
+  ./goprincipleandpractise/interface/performance \
+  ./goprincipleandpractise/log/performance \
+  ./goprincipleandpractise/struct/performance/set
+
 # 运行 fuzzing 示例（当前可通过的子包）
 go test ./goprincipleandpractise/fuzzingtest/byteparser \
   ./goprincipleandpractise/fuzzingtest/multiparam \
@@ -75,9 +82,9 @@ go test -run=^FuzzParseAge$ ./goprincipleandpractise/fuzzingtest
 
 ### 1) 如果你想系统补 Go 基础与进阶
 优先阅读 `goprincipleandpractise/`：
-- 并发：`channel`、`lock`、`sync`、`context`
+- 并发：`channel`、`sync`、`context`、`concurrency`
 - 数据结构与性能：`slice`、`map`、`string`、`struct`
-- 工程能力：`unit-test`、`benchmark`、`pprof-practise`、`fuzzingtest`
+- 工程能力：`unit-test`、`benchmark`、`pprof-practise`、`fuzzingtest`、`codegen`、`project-layout`
 
 ### 2) 如果你在做后端基础设施
 优先阅读 `middlewares/`：
@@ -105,11 +112,15 @@ go test -run=^FuzzParseAge$ ./goprincipleandpractise/fuzzingtest
 - `goprincipleandpractise/lock/go语言中的锁详解.md`
 - `goprincipleandpractise/context/context详解.md`
 - `goprincipleandpractise/fuzzingtest/详解go语言中的fuzzing.md`
+- `goprincipleandpractise/concurrency/并发进阶.md`
+- `goprincipleandpractise/interface/接口详解.md`
+- `goprincipleandpractise/codegen/Go代码生成详解.md`
+- `goprincipleandpractise/log/Go日志详解.md`
 - `goprincipleandpractise/sync/errgroup源码分析.md`
 
 ### 中间件
 - `middlewares/mysql/`（18 篇）
-- `middlewares/redis/`（12 篇）
+- `middlewares/redis/`（13 篇）
 - `middlewares/kafka/`（2 篇）
 
 ### Linux 性能
@@ -130,9 +141,14 @@ go-notes/
 ├── goprincipleandpractise/             # Go 原理、性能优化、源码分析、踩坑
 │   ├── benchmark/
 │   ├── channel/
+│   ├── codegen/
+│   ├── concurrency/
 │   ├── gc/
+│   ├── interface/
 │   ├── lock/
+│   ├── log/
 │   ├── map/
+│   ├── project-layout/
 │   ├── slice/
 │   ├── string/
 │   ├── sync/
@@ -175,7 +191,7 @@ go-notes/
 
 ## 维护与更新
 
-- 文档 Owner：john.q
+- 文档 Owner：`Not found in repo`
 - CI workflows：`Not found in repo`（未发现 `.github/workflows`）
 
 维护策略：
