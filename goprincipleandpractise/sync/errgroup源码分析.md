@@ -159,9 +159,10 @@ func TestErrHandle(t *testing.T) {
 func WithContext(ctx context.Context) (*Group, context.Context)
 ```
 
-在了解了 WithContext 函数之后，现在让我们 errgroup 包来实现任务取消功能。如同下面的代码，和前面实现错误处理功能不同，
-用 errgroup 包来实现任务取消功能，有两个核心要点。第一点，需要用 WithContext 函数创建 Group 对象。
-第二点，在传入 Go 方法的函数中，需要实现 select-done 模式，也就是当函数运行时，发现 context 被取消，则直接返回，
+在了解了 WithContext 函数之后，现在让我们 errgroup 包来实现任务取消功能。下面的代码，和前面实现错误处理功能不同，
+用 errgroup 包来实现任务取消功能，有两个核心要点:
+- 第一点，需要用 WithContext 函数创建 Group 对象。
+- 第二点，在传入 Go 方法的函数中，需要实现 select-done 模式，也就是当函数运行时，发现 context 被取消，则直接返回，
 从而避免执行业务逻辑。
 
 
