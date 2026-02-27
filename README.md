@@ -85,6 +85,7 @@ go test -run=^FuzzParseAge$ ./goprincipleandpractise/fuzzingtest
 - 并发：`channel`、`sync`、`context`、`concurrency`
 - 数据结构与性能：`slice`、`map`、`string`、`struct`
 - 工程能力：`unit-test`、`benchmark`、`pprof-practise`、`fuzzingtest`、`codegen`、`project-layout`
+- 工程化：`makefile`、`ci-cd`、`docker`、`release`
 
 ### 2) 如果你在做后端基础设施
 优先阅读 `middlewares/`：
@@ -126,6 +127,12 @@ go test -run=^FuzzParseAge$ ./goprincipleandpractise/fuzzingtest
 ### Linux 性能
 - `enhancelinuxperformance/`（01~35 系列）
 
+### 工程化实践
+- `goprincipleandpractise/makefile/` — Makefile 设计与构建自动化
+- `goprincipleandpractise/ci-cd/` — CI/CD 与 PR 流程（GitHub Actions / GitLab CI）
+- `goprincipleandpractise/docker/` — Docker 化构建与镜像优化
+- `goprincipleandpractise/release/` — 版本管理与发布流程（goreleaser / viper / ldflags）
+
 ### 设计模式与工程工具
 - `designpattern/`（示例代码）
 - `productivetools/`（效率工具与实践）
@@ -152,6 +159,10 @@ go-notes/
 │   ├── slice/
 │   ├── string/
 │   ├── sync/
+│   ├── makefile/              # Makefile 设计与构建自动化
+│   ├── ci-cd/                 # CI/CD 与 PR 流程
+│   ├── docker/                # Docker 化构建与镜像优化
+│   ├── release/               # 版本管理与发布流程
 │   └── ...
 ├── middlewares/                        # MySQL / Redis / Kafka 专题
 ├── enhancelinuxperformance/            # Linux 性能优化 35 篇系列
