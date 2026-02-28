@@ -5,7 +5,7 @@
 ## 目录
 
 1. [随机数安全](#1-随机数安全)
-2. [SQL 注入防御](#2-sql-注入防御)
+2. [SQL注入防御与SQL 资源生命周期安全](#2-SQL注入防御与SQL资源生命周期安全)
 3. [敏感数据处理](#3-敏感数据处理)
 4. [密钥与配置管理](#4-密钥与配置管理)
 5. [TLS 配置](#5-tls-配置)
@@ -68,9 +68,11 @@ func generateTokenBase64() (string, error) {
 
 ---
 
-## 2. SQL 注入防御
+## 2. SQL注入防御与SQL资源生命周期安全
 
-### 注入机制
+### SQL注入防御
+
+#### 注入机制
 
 SQL 注入的根本原因是**代码和数据混合**。使用字符串拼接时，用户输入成为 SQL 语句的一部分，可以改变语句语义：
 
@@ -82,7 +84,7 @@ query := fmt.Sprintf("SELECT * FROM users WHERE name = '%s'", userInput)
 // 实际执行: SELECT * FROM users WHERE name = '' OR '1'='1'  → 返回所有用户
 ```
 
-### 参数化查询
+#### 参数化查询
 
 参数化查询将 SQL 结构和数据分离，数据库驱动负责正确处理参数：
 
@@ -96,7 +98,7 @@ db.Query("SELECT * FROM users WHERE name = ?", userInput)
 // 3. 无论参数内容如何，都不会改变 SQL 结构
 ```
 
-### 特殊场景安全写法
+#### 特殊场景安全写法
 
 **LIKE 子句**：
 ```go
@@ -138,6 +140,87 @@ query := fmt.Sprintf("SELECT * FROM users ORDER BY %s", sortColumn)
 ```
 
 > **反例**: [trap/sql-injection-sprintf/](trap/sql-injection-sprintf/) — SQLite 实机演示注入攻击
+
+### SQL 资源生命周期安全（连接池 / Stmt / Rows / Tx）
+
+SQL 安全不只有注入问题。`database/sql` 中资源未及时释放会导致连接池耗尽、内存增长、请求阻塞，最终演化为可用性风险（DoS 面）。
+
+#### 1) Rows：必须 Close，循环后必须检查 Err
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+defer cancel()
+
+rows, err := db.QueryContext(ctx, "SELECT id, name FROM users WHERE status = ?", "active")
+if err != nil {
+    return err
+}
+defer rows.Close()
+
+for rows.Next() {
+    var id int64
+    var name string
+    if err := rows.Scan(&id, &name); err != nil {
+        return err
+    }
+}
+if err := rows.Err(); err != nil {
+    return err
+}
+```
+
+#### 2) Stmt：Prepare 后必须 Close，避免高频泄漏
+
+```go
+stmt, err := db.PrepareContext(ctx, "INSERT INTO logs (msg) VALUES (?)")
+if err != nil {
+    return err
+}
+defer stmt.Close()
+
+for _, msg := range msgs {
+    if _, err := stmt.ExecContext(ctx, msg); err != nil {
+        return err
+    }
+}
+```
+
+#### 3) Tx：Begin 后必须保证 Commit 或 Rollback 成对出现
+
+```go
+tx, err := db.BeginTx(ctx, nil)
+if err != nil {
+    return err
+}
+defer tx.Rollback() // Commit 成功后会变成 no-op
+
+if _, err := tx.ExecContext(ctx, "UPDATE account SET balance = balance - ? WHERE id = ?", amount, fromID); err != nil {
+    return err
+}
+if _, err := tx.ExecContext(ctx, "UPDATE account SET balance = balance + ? WHERE id = ?", amount, toID); err != nil {
+    return err
+}
+return tx.Commit()
+```
+
+#### 4) DB（连接池对象）：进程级复用，配置池参数并在退出时关闭
+
+```go
+db.SetMaxOpenConns(50)
+db.SetMaxIdleConns(25)
+db.SetConnMaxLifetime(30 * time.Minute)
+db.SetConnMaxIdleTime(5 * time.Minute)
+```
+
+> `*sql.DB` 是连接池，不应按请求创建/关闭；应在应用启动时初始化，应用退出时统一 `db.Close()`。
+>
+> **相关反例**:
+> - [rows-not-closed](../database-sql/trap/rows-not-closed/) — 不关闭 rows 导致连接池耗尽
+> - [stmt-leak](../database-sql/trap/stmt-leak/) — 循环 Prepare 不 Close 导致资源泄漏
+> - [rows-err-ignored](../database-sql/trap/rows-err-ignored/) — 忽略 rows.Err() 导致静默数据错误
+>
+> **相关性能实践**:
+> - [pool-size-tuning](../database-sql/performance/pool-size-tuning/) — 连接池参数对吞吐影响
 
 ---
 
@@ -529,6 +612,9 @@ const secret = "abc" //nolint:gosec
 
 - [ ] 安全随机数使用 `crypto/rand`
 - [ ] SQL 查询使用参数化（? 占位符）
+- [ ] SQL 查询后 `rows.Close()`，并在循环结束后检查 `rows.Err()`
+- [ ] `Prepare` 后有 `stmt.Close()`，`BeginTx` 后能保证 `Commit/Rollback`
+- [ ] 数据库请求使用超时 `context`，连接池参数已设置（`SetMaxOpenConns` 等）
 - [ ] 日志不包含密码、token 等敏感信息
 - [ ] 敏感字段有 `json:"-"` 标签
 - [ ] 密钥从环境变量读取，缺失时 fail-fast

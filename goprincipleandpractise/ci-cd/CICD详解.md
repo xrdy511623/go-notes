@@ -2,6 +2,8 @@
 
 > 覆盖 GitHub Actions、GitLab CI 配置、PR 最佳实践、Pipeline 设计模式，配有反例（trap/）和性能基准（performance/）。
 
+> 说明：本仓库当前未内置 `.github/workflows/` 或 `.gitlab-ci.yml`，下文配置为可迁移模板（示例），用于落地时参考。
+
 ## 目录
 
 1. [CI/CD 基本概念](#1-cicd-基本概念)
@@ -50,6 +52,7 @@ permissions:                       # 最小权限原则
 
 env:                               # 全局环境变量
   GO_VERSION: '1.24'
+  GOLANGCI_LINT_VERSION: 'v1.62.2' # 建议固定版本，避免 latest 漂移
 
 jobs:                              # 任务定义
   test:
@@ -125,7 +128,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --timeout=5m
 
   test:
@@ -142,7 +145,7 @@ jobs:
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Coverage: ${COVERAGE}%"
-          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+          if ! awk -v cov="$COVERAGE" 'BEGIN { exit (cov+0 >= 80) ? 0 : 1 }'; then
             echo "::error::覆盖率 ${COVERAGE}% 低于 80% 门禁"
             exit 1
           fi
@@ -221,6 +224,7 @@ image: golang:1.24
 variables:
   GOPATH: /go
   CGO_ENABLED: "0"
+  GOLANGCI_LINT_VERSION: "v1.62.2"
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
@@ -236,7 +240,7 @@ stages:
 lint:
   stage: lint
   script:
-    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
     - golangci-lint run --timeout=5m ./...
 
 test:
@@ -254,9 +258,9 @@ build:
     paths:
       - bin/app
     expire_in: 1 week
-  only:
-    - main
-    - tags
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
 ```
 
 ### 3.2 GitHub Actions vs GitLab CI 核心差异
@@ -268,7 +272,7 @@ build:
 | 并行控制 | job 默认并行，step 串行 | 同 stage 内 job 并行 |
 | 缓存 | `actions/cache` 或内置 | 内置 `cache:` 关键字 |
 | 制品 | `actions/upload-artifact` | `artifacts:` 关键字 |
-| 触发条件 | `on:` + 复杂事件匹配 | `rules:` / `only:` / `except:` |
+| 触发条件 | `on:` + 复杂事件匹配 | `rules:`（推荐）/ `only:` / `except:` |
 | 复用 | Reusable workflows | `include:` / `extends:` |
 | 生态 | Marketplace（第三方丰富） | 模板库 |
 | 容器支持 | 需 Docker action | 原生 Docker-in-Docker |
@@ -455,7 +459,7 @@ run:
 - run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
 - run: |
     COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-    if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+    if ! awk -v cov="$COVERAGE" 'BEGIN { exit (cov+0 >= 80) ? 0 : 1 }'; then
       echo "::error::覆盖率 ${COVERAGE}% 低于 80% 门禁"
       exit 1
     fi
@@ -480,7 +484,8 @@ run:
 ```yaml
 - run: go test -run='^$' -bench=. -benchmem -count=5 ./... > new.txt
 - run: |
-    go install golang.org/x/perf/cmd/benchstat@latest
+    # 固定版本或 commit，避免 latest 漂移
+    go install golang.org/x/perf/cmd/benchstat@<pinned-version>
     benchstat baseline.txt new.txt
 ```
 
@@ -501,6 +506,8 @@ permissions:
 
 env:
   GO_VERSION: '1.24'
+  GOLANGCI_LINT_VERSION: 'v1.62.2'
+  GOSEC_VERSION: 'v2.22.0'
 
 jobs:
   lint:
@@ -510,7 +517,7 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version: '${{ env.GO_VERSION }}' }
       - uses: golangci/golangci-lint-action@v6
-        with: { version: latest, args: '--timeout=5m' }
+        with: { version: '${{ env.GOLANGCI_LINT_VERSION }}', args: '--timeout=5m' }
 
   test:
     runs-on: ubuntu-latest
@@ -528,7 +535,7 @@ jobs:
         run: |
           COV=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Coverage: ${COV}%"
-          (( $(echo "$COV < 80" | bc -l) )) && echo "::error::Low coverage" && exit 1 || true
+          awk -v cov="$COV" 'BEGIN { exit (cov+0 >= 80) ? 0 : 1 }' || (echo "::error::Low coverage" && exit 1)
 
   security:
     runs-on: ubuntu-latest
@@ -536,7 +543,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version: '${{ env.GO_VERSION }}' }
-      - run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest && gosec ./...
+      - run: go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }} && gosec ./...
 
   build:
     needs: [lint, test, security]

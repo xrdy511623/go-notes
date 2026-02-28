@@ -2,6 +2,8 @@
 
 > Go 天然适合容器化：静态编译、单二进制、无运行时依赖。本文覆盖 Dockerfile 编写、多阶段构建、镜像优化、安全最佳实践。
 
+> 说明：本目录当前未提供可直接运行的 `Dockerfile` / `docker-compose.yml` / `.dockerignore`，下文以可迁移模板示例为主。
+
 ## 目录
 
 1. [为什么 Go 适合容器化](#1-为什么-go-适合容器化)
@@ -21,7 +23,7 @@
 | 运行时依赖 | 无（CGO_ENABLED=0） | JRE / Python / Node.js |
 | 最小镜像 | scratch（0MB 基础） | 需要运行时（100-800MB） |
 | 启动速度 | 毫秒级 | 秒级（JVM 预热） |
-| 内存占用 | 低（无 GC overhead） | 较高 |
+| 内存占用 | 低（GC 运行时开销相对可控） | 较高 |
 
 Go 的 `CGO_ENABLED=0` 静态编译可以生成完全自包含的二进制，放进空白镜像（scratch）就能运行。
 
@@ -37,6 +39,8 @@ Go 的 `CGO_ENABLED=0` 静态编译可以生成完全自包含的二进制，放
 | `alpine:3.19` | ~7MB | 极少 | 有 | 基础 | 需要 shell 调试 |
 | `gcr.io/distroless/static` | ~2MB | 极少 | 无 | 无 | 生产推荐 |
 | `scratch` | 0MB | 0 | 无 | 无 | 极致精简 |
+
+> 注：镜像体积与 CVE 数量为示意值，会随镜像版本、扫描时间和扫描规则变化。
 
 **选择建议**：
 - **生产环境**：distroless 或 scratch
@@ -92,7 +96,9 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -trimpath -o /app/server ./cmd/serve
 
 # === 阶段 2：测试 ===
 FROM builder AS tester
-RUN go test -race -count=1 ./...
+# -race 依赖 CGO 与 C 工具链；alpine 场景建议补齐 build-base
+RUN apk add --no-cache build-base
+RUN CGO_ENABLED=1 go test -race -count=1 ./...
 RUN go vet ./...
 
 # === 阶段 3：运行 ===
@@ -203,7 +209,7 @@ services:
       - DB_HOST=mysql
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=secret
+      - DB_PASSWORD=${DB_PASSWORD:?set in .env}
       - REDIS_URL=redis://redis:6379
     depends_on:
       mysql:
@@ -214,7 +220,7 @@ services:
   mysql:
     image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in .env}
       MYSQL_DATABASE: myapp
     ports:
       - "3306:3306"
@@ -240,6 +246,8 @@ volumes:
   mysql_data:
 ```
 
+建议把敏感信息放到 `.env` 或 secret 管理系统中，不要在 compose 文件里明文硬编码。
+
 ### 热重载（air）
 
 ```yaml
@@ -256,7 +264,8 @@ services:
 ```dockerfile
 # Dockerfile.dev
 FROM golang:1.24-alpine
-RUN go install github.com/air-verse/air@latest
+# 固定版本，避免 latest 漂移
+RUN go install github.com/air-verse/air@<pinned-version>
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -307,7 +316,8 @@ trivy image myapp:latest
 
 # CI 中集成
 - name: Scan image
-  uses: aquasecurity/trivy-action@master
+  # 固定 tag 或 commit SHA，避免 master 漂移
+  uses: aquasecurity/trivy-action@<pinned-tag-or-sha>
   with:
     image-ref: myapp:latest
     severity: 'CRITICAL,HIGH'

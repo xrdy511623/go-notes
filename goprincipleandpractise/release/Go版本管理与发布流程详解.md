@@ -2,6 +2,8 @@
 
 > 覆盖语义化版本、ldflags 注入、goreleaser 自动发布、viper 配置管理、Go module 发布，配有反例（trap/）和性能基准（performance/）。
 
+> 说明：本目录当前未内置 `.goreleaser.yml` 或 `.github/workflows/release.yml`，下文相关配置为可迁移模板示例。
+
 ## 目录
 
 1. [语义化版本](#1-语义化版本)
@@ -105,8 +107,8 @@ func main() {
 构建脚本：
 
 ```bash
-VERSION=$(git describe --tags --always --dirty)
-COMMIT=$(git rev-parse --short HEAD)
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
 go build -ldflags="\
@@ -208,6 +210,10 @@ permissions:
   contents: write
   packages: write
 
+env:
+  GO_VERSION: '1.24.0'          # 固定版本，避免 stable 漂移
+  GORELEASER_VERSION: 'v2.8.0'  # 固定版本，避免 ~> 规则漂移
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -217,10 +223,10 @@ jobs:
           fetch-depth: 0       # goreleaser 需要完整 git 历史
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version: ${{ env.GO_VERSION }}
       - uses: goreleaser/goreleaser-action@v6
         with:
-          version: "~> v2"
+          version: ${{ env.GORELEASER_VERSION }}
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -375,7 +381,7 @@ retract (
 ## 总结
 
 | 主题 | 关键实践 |
-|------|---------+
+|------|---------|
 | 版本号 | 严格遵循 SemVer，v2+ 修改 import path |
 | 版本注入 | ldflags 注入 version/commit/buildTime |
 | 自动发布 | goreleaser + GitHub Actions |

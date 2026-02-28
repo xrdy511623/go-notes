@@ -11,6 +11,7 @@
 5. [.PHONY 与依赖链](#5-phony-与依赖链)
 6. [与 go generate 集成](#6-与-go-generate-集成)
 7. [进阶技巧](#7-进阶技巧)
+8. [依赖工具与环境自检](#8-依赖工具与环境自检)
 
 ---
 
@@ -111,6 +112,28 @@ help:
 | `run` | 编译并运行 | ❌ | ✅ |
 | `help` | 显示帮助 | ❌ | ✅ |
 
+### 本地开发 vs CI 分层 target（推荐）
+
+下面这组 target 可以解决“本地反馈慢、CI 规则重”的常见问题：
+
+```makefile
+.PHONY: pre-commit test-fast ci
+
+## test-fast: 本地快速测试（不带 race）
+test-fast:
+	go test -count=1 ./...
+
+## pre-commit: 提交前检查（本地）
+pre-commit: fmt vet test-fast
+
+## ci: CI 全量门禁
+ci: lint test build
+```
+
+建议：
+- 本地日常用 `make test-fast` 和 `make pre-commit`，缩短反馈时间
+- CI 流水线固定用 `make ci`，确保质量标准一致
+
 ---
 
 ## 3 变量与约定
@@ -124,8 +147,9 @@ BUILD_DIR   := bin                      # 输出目录
 CMD_DIR     := ./cmd/$(APP_NAME)        # 入口目录
 
 # === 版本信息（自动从 Git 获取）===
-VERSION     := $(shell git describe --tags --always --dirty)
-COMMIT      := $(shell git rev-parse --short HEAD)
+# 推荐加 fallback，避免在无 git 环境（如源码包、部分 CI 容器）中失败
+VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME  := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
 # === Go 编译选项 ===
@@ -321,6 +345,35 @@ test:
 		echo "$(GREEN)✓ All tests passed$(RESET)" || \
 		(echo "$(RED)✗ Tests failed$(RESET)" && exit 1)
 ```
+
+---
+
+## 8 依赖工具与环境自检
+
+文档中的一些 target 依赖外部工具，建议在项目中提供 `deps`/`check-tools`，减少“照抄失败”。
+
+```makefile
+.PHONY: deps check-tools
+
+## deps: 安装常用开发工具（按需调整版本）
+deps:
+	go install golang.org/x/tools/cmd/goimports@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2
+	go install github.com/golang/mock/mockgen@latest
+
+## check-tools: 检查工具是否可用
+check-tools:
+	@command -v go >/dev/null || (echo "missing: go" && exit 1)
+	@command -v golangci-lint >/dev/null || (echo "missing: golangci-lint" && exit 1)
+	@command -v goimports >/dev/null || (echo "missing: goimports" && exit 1)
+	@command -v mockgen >/dev/null || (echo "missing: mockgen" && exit 1)
+	@command -v protoc >/dev/null || (echo "missing: protoc (optional, needed by make proto)" && exit 1)
+```
+
+实践建议：
+- 在 `help` 中显式展示 `deps`、`check-tools`
+- 在 CI 首步执行 `make check-tools`
+- `proto`/`mock` 这类可选 target，在说明里写清“何时需要”
 
 ---
 
