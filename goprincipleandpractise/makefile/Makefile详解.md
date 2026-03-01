@@ -72,7 +72,7 @@ lint:
 ## fmt: 格式化代码
 fmt:
 	gofmt -w .
-	goimports -w .
+	goimports-reviser -w .
 
 ## vet: 静态分析
 vet:

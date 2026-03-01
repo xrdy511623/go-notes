@@ -351,6 +351,7 @@ COPY --from=builder /app/server /server
 | .dockerignore | 排除 .git、.env、docs、bin 等 |
 
 **镜像大小参考**：
+
 | 配置 | 大小 |
 |------|------|
 | golang:1.24 运行 | ~800MB |
