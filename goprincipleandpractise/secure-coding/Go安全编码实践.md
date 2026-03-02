@@ -1,6 +1,6 @@
 # Go 安全编码实践
 
-> 覆盖 Go 安全编码七大领域，每个章节配有可运行的反例（trap/）和性能基准（performance/）。
+> 覆盖 Go 安全编码八大领域，每个章节配有可运行的反例（trap/）和性能基准（performance/）。
 
 ## 目录
 
@@ -11,6 +11,7 @@
 5. [TLS 配置](#5-tls-配置)
 6. [密码学原语](#6-密码学原语)
 7. [gosec 静态安全扫描](#7-gosec-静态安全扫描)
+8. [govulncheck 源代码级漏洞扫描](#8-govulncheck-源代码级漏洞扫描)
 
 ---
 
@@ -606,6 +607,110 @@ const secret = "abc" //nolint:gosec
 
 ---
 
+## 8. govulncheck 源代码级漏洞扫描
+
+### 为什么 `go list -m all` 不够？
+
+`go list -m all` 只列出项目依赖了哪些模块，但无法判断代码是否真正调用了含漏洞的函数。一个模块可能包含已知漏洞，但如果你的代码从未触达漏洞函数，实际风险为零。
+
+`govulncheck` 通过**调用图分析**（call graph analysis），只报告代码实际可达的漏洞路径，大幅减少误报。
+
+### 安装与基本用法
+
+```bash
+# 安装
+go install golang.org/x/vuln/cmd/govulncheck@latest
+
+# 扫描当前项目（源代码模式，分析调用图）
+govulncheck ./...
+
+# 仅扫描 go.mod 依赖（不分析调用图，可能有误报）
+govulncheck -mode=binary ./...
+```
+
+### 调用图分析原理
+
+govulncheck 有两种扫描模式：
+
+| 模式 | 输入 | 分析深度 | 误报率 |
+|------|------|----------|--------|
+| **source**（默认） | 源码 + go.mod | 构建调用图，追踪漏洞函数是否可达 | 低 |
+| **binary** | 编译后二进制 | 扫描符号表 | 中 |
+
+**source 模式工作流程：**
+1. 解析 `go.mod` 获取依赖列表
+2. 查询 Go 漏洞数据库（https://vuln.go.dev）匹配已知 CVE
+3. 对匹配的漏洞，构建从 `main()` 到漏洞函数的调用图
+4. 只有调用图可达的漏洞才报告为"受影响"
+
+### 输出解读
+
+```
+Vulnerability #1: GO-2024-2687
+    HTTP/2 CONTINUATION flood in net/http
+  More info: https://pkg.go.dev/vuln/GO-2024-2687
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.17.0
+    Fixed in: golang.org/x/net@v0.23.0
+    Example trace found:
+      cmd/server/main.go:25:2  → net/http.ListenAndServeTLS
+      net/http/server.go:3285  → http2configureServer
+      golang.org/x/net/http2.ConfigureServer
+```
+
+输出关键字段：
+- **Vulnerability ID**: Go 漏洞数据库编号（链接到详情页）
+- **Module / Found in / Fixed in**: 受影响模块及修复版本
+- **Example trace**: 从你的代码到漏洞函数的调用路径
+
+### govulncheck vs gosec 对照表
+
+| 维度 | gosec | govulncheck |
+|------|-------|-------------|
+| 检查对象 | 源码模式（代码写法） | 已知 CVE（依赖漏洞） |
+| 输入 | `.go` 文件 | `go.mod` + 源码调用图 |
+| 输出 | 规则违反（G101、G201…） | 可达漏洞路径 + 修复版本 |
+| 用途 | 编码规范检查 | 供应链安全 |
+| 数据源 | 内置规则集 | Go 漏洞数据库 (vuln.go.dev) |
+| 互补关系 | 检查开发者行为 | 检查第三方依赖风险 |
+
+**两者互补，缺一不可**：gosec 防止你写出不安全的代码，govulncheck 防止你引入含漏洞的依赖。
+
+### CI/CD 集成
+
+```yaml
+# .github/workflows/security.yml
+name: Security Scan
+on: [push, pull_request]
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
+```
+
+> 也可使用官方 GitHub Action：`golang/govulncheck-action@v1`
+
+### 修复流程
+
+1. 运行 `govulncheck ./...`
+2. 对报告的漏洞，升级到 Fixed in 版本：`go get module@version`
+3. 运行 `go mod tidy` 清理依赖
+4. 重新运行 `govulncheck ./...` 确认修复
+5. 对无法升级的漏洞，评估实际风险并记录决策
+
+> **反例**: [trap/vulnerable-dep-call-graph/](trap/vulnerable-dep-call-graph/) — 调用图分析：导入 ≠ 受影响
+
+---
+
 ## 安全编码检查清单
 
 在提交代码前，确认以下事项：
@@ -622,4 +727,5 @@ const secret = "abc" //nolint:gosec
 - [ ] 密码存储使用 bcrypt 或 argon2id
 - [ ] 密码学比较使用 `subtle.ConstantTimeCompare` 或 `hmac.Equal`
 - [ ] gosec 扫描无 HIGH 级别告警
+- [ ] govulncheck ./... 无已知漏洞（或已评估接受风险）
 - [ ] 错误信息不暴露内部实现细节
