@@ -1,0 +1,934 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "API Design Demo",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "healthz",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthzResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "summary": "List users (v1)",
+        "operationId": "listUsersV1",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "$ref": "#/components/parameters/Sort"
+          },
+          {
+            "$ref": "#/components/parameters/Order"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "users list",
+            "headers": {
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "X-Trace-ID": {
+                "$ref": "#/components/headers/XTraceID"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create user (v1)",
+        "operationId": "createUserV1",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "created",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Idempotent-Replayed": {
+                "$ref": "#/components/headers/XIdempotentReplayed"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "X-Trace-ID": {
+                "$ref": "#/components/headers/XTraceID"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidJSON"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserID"
+        }
+      ],
+      "get": {
+        "summary": "Get user (v1)",
+        "operationId": "getUserV1",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "user detail",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "X-Trace-ID": {
+                "$ref": "#/components/headers/XTraceID"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "summary": "Replace user (v1)",
+        "operationId": "replaceUserV1",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "replaced",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "X-Trace-ID": {
+                "$ref": "#/components/headers/XTraceID"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidJSON"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Patch user (v1)",
+        "operationId": "patchUserV1",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "patched",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "X-Trace-ID": {
+                "$ref": "#/components/headers/XTraceID"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidJSON"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete user (v1)",
+        "operationId": "deleteUserV1",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "deleted",
+            "headers": {
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
+              "X-Trace-ID": {
+                "$ref": "#/components/headers/XTraceID"
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestID"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v2/users": {
+      "get": {
+        "summary": "List users (v2)",
+        "operationId": "listUsersV2",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "users list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v2/users/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserID"
+        }
+      ],
+      "get": {
+        "summary": "Get user (v2)",
+        "operationId": "getUserV2",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "user detail",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "token"
+      }
+    },
+    "parameters": {
+      "UserID": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "Offset": {
+        "name": "offset",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "Sort": {
+        "name": "sort",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "id",
+            "name",
+            "email",
+            "age",
+            "created_at",
+            "updated_at"
+          ],
+          "default": "created_at"
+        }
+      },
+      "Order": {
+        "name": "order",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "asc"
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Strong ETag required for optimistic concurrency control"
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "description": "Scoped by tenant + subject + method + path, cached with TTL and fingerprint check"
+      }
+    },
+    "headers": {
+      "ETag": {
+        "description": "Resource entity tag",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Deprecation": {
+        "description": "Marks endpoint as deprecated",
+        "schema": {
+          "type": "string",
+          "example": "true"
+        }
+      },
+      "Sunset": {
+        "description": "Planned sunset datetime",
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "Link": {
+        "description": "Successor API version",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XTraceID": {
+        "description": "Request trace identifier",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XRequestID": {
+        "description": "Request identifier",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XIdempotentReplayed": {
+        "description": "Whether response was replayed from idempotency cache",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "true"
+          ]
+        }
+      }
+    },
+    "schemas": {
+      "HealthzResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "age": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 150
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "age",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "age": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 150
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ]
+      },
+      "PutUserRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "age": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 150
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "age"
+        ]
+      },
+      "PatchUserRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "age": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 150
+          }
+        },
+        "minProperties": 1
+      },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "limit"
+        ]
+      },
+      "AuditFields": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "tenant": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "audit": {
+            "$ref": "#/components/schemas/AuditFields"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "UsersResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/User"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      }
+    },
+    "responses": {
+      "InvalidJSON": {
+        "description": "Invalid JSON",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Conflict",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "PreconditionFailed": {
+        "description": "Precondition failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ValidationFailed": {
+        "description": "Validation failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -85,7 +85,23 @@ func applyRule(rule string, val reflect.Value, name string) string {
 	}
 }
 
+func derefValue(val reflect.Value) (reflect.Value, bool) {
+	for val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return reflect.Value{}, false
+		}
+		val = val.Elem()
+	}
+	return val, true
+}
+
 func checkRequired(val reflect.Value, name string) string {
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return fmt.Sprintf("%s is required", name)
+		}
+		return ""
+	}
 	if val.IsZero() {
 		return fmt.Sprintf("%s is required", name)
 	}
@@ -93,10 +109,14 @@ func checkRequired(val reflect.Value, name string) string {
 }
 
 func checkEmail(val reflect.Value, name string) string {
-	if val.Kind() != reflect.String {
+	unwrapped, ok := derefValue(val)
+	if !ok {
 		return ""
 	}
-	s := val.String()
+	if unwrapped.Kind() != reflect.String {
+		return ""
+	}
+	s := unwrapped.String()
 	if s == "" {
 		return "" // required 规则负责检查空值
 	}
@@ -113,13 +133,18 @@ func checkMin(rule string, val reflect.Value, name string) string {
 		return ""
 	}
 
-	switch val.Kind() {
+	unwrapped, ok := derefValue(val)
+	if !ok {
+		return ""
+	}
+
+	switch unwrapped.Kind() {
 	case reflect.String:
-		if int64(len(val.String())) < minVal {
+		if int64(len(unwrapped.String())) < minVal {
 			return fmt.Sprintf("%s must be at least %d characters", name, minVal)
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if val.Int() < minVal {
+		if unwrapped.Int() < minVal {
 			return fmt.Sprintf("%s must be at least %d", name, minVal)
 		}
 	}
@@ -133,13 +158,18 @@ func checkMax(rule string, val reflect.Value, name string) string {
 		return ""
 	}
 
-	switch val.Kind() {
+	unwrapped, ok := derefValue(val)
+	if !ok {
+		return ""
+	}
+
+	switch unwrapped.Kind() {
 	case reflect.String:
-		if int64(len(val.String())) > maxVal {
+		if int64(len(unwrapped.String())) > maxVal {
 			return fmt.Sprintf("%s must be at most %d characters", name, maxVal)
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if val.Int() > maxVal {
+		if unwrapped.Int() > maxVal {
 			return fmt.Sprintf("%s must be at most %d", name, maxVal)
 		}
 	}

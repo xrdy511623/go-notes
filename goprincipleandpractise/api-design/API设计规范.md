@@ -178,6 +178,12 @@ GET /api/v1/users?page=2&limit=20&sort=created_at&order=desc&status=active
 - `order`: `asc` 或 `desc`
 - 过滤参数使用字段名（`status=active`）
 
+当前示例实现（`restful/handler.go`）已落地：
+- 支持 `page/limit/offset/sort/order`
+- `sort` 白名单：`id,name,email,age,created_at,updated_at`
+- 排序稳定：主排序字段 + `id` 作为 tie-breaker
+- `meta` 返回 `total/page/limit/offset/trace_id`
+
 ### 2.5 幂等性
 
 POST 请求天然非幂等，但通过 `Idempotency-Key` 头部可以实现幂等：
@@ -187,7 +193,11 @@ POST /api/v1/orders
 Idempotency-Key: order-abc-123
 ```
 
-服务端缓存 `(Idempotency-Key → Response)`，相同 Key 的重复请求直接返回缓存响应。
+生产化实现建议（本示例已落地）：
+- **作用域**：`tenant + subject + method + path + key`
+- **TTL**：缓存记录带过期时间，过期后自动失效
+- **请求指纹**：同 key 且请求体不同返回 `409 Conflict`
+- **回放标记**：命中缓存时返回 `X-Idempotent-Replayed: true`
 
 > 实现见 [`restful/handler.go`](restful/handler.go) CreateUser 方法
 > 反模式见 [`trap/missing-idempotency/`](trap/missing-idempotency/main.go)
@@ -299,6 +309,11 @@ Link: </api/v2/users>; rel="successor-version"
 4. 监控旧版本流量
 5. 流量降至 0 或到达 Sunset 日期后下线
 
+本示例执行机制：
+- `restful/middleware.go` 中的 `DeprecationHeaders` 自动注入 `Deprecation/Sunset/Link`
+- 仅对 `/api/v1/*` 生效，`/api/v2/*` 不注入
+- 通过 CI（见 `.github/workflows/api-contract.yml`）持续校验契约
+
 ---
 
 ## 5. 错误码体系
@@ -370,6 +385,12 @@ log.Printf("[ERROR] code=%s method=%s path=%s internal=%v request_id=%s",
 ```
 
 客户端通过 `request_id` 关联请求与服务端日志。
+
+协议层建议（本示例已实现）：
+- 错误响应统一包含 `error.trace_id`
+- 错误响应附带 `error.metric`（如 `http_request_errors_total`）
+- 错误响应附带 `error.audit`（`subject/tenant/role`）
+- 响应头统一暴露 `X-Trace-ID` 与 `X-Request-ID`
 
 ---
 
@@ -516,10 +537,10 @@ grpc.NewServer(
 Authorization: Bearer <token>
 ```
 
-认证中间件提取 Token 并验证：
+认证中间件提取 Token，解析 `Principal(subject/tenant/role)` 并写入上下文：
 
 ```go
-func Auth(tokenValidator func(token string) bool) Middleware {
+func Auth(tokenValidator TokenValidator) Middleware {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             auth := r.Header.Get("Authorization")
@@ -528,11 +549,13 @@ func Auth(tokenValidator func(token string) bool) Middleware {
                 return
             }
             token := strings.TrimPrefix(auth, "Bearer ")
-            if !tokenValidator(token) {
+            principal, ok := tokenValidator(token)
+            if !ok {
                 WriteError(w, NewAppError(ErrUnauthorized, "invalid token", nil))
                 return
             }
-            next.ServeHTTP(w, r)
+            ctx := context.WithValue(r.Context(), principalContextKey, principal)
+            next.ServeHTTP(w, r.WithContext(ctx))
         })
     }
 }
@@ -567,6 +590,15 @@ if len(valid) >= rl.limit {
 
 > 实现见 [`restful/middleware.go`](restful/middleware.go)
 
+### 8.4 对象级授权与多租户边界
+
+仅认证不足以防止 IDOR，必须做对象级授权：
+- 同租户校验：`principal.tenant == resource.tenant`
+- 对象所有权校验：`owner == principal.subject`，管理员角色可例外
+- 失败返回 `403 Forbidden`（不是 404 伪装）
+
+本示例在 `restful/handler.go` 的 `canAccessUser` 统一执行上述规则，并在测试中覆盖跨租户和同租户越权场景。
+
 ---
 
 ## 9. 最佳实践与检查清单
@@ -586,6 +618,8 @@ if len(valid) >= rl.limit {
 - [ ] **授权**: 正确区分 401/403
 - [ ] **限流**: 配置限流并返回 429 + Retry-After
 - [ ] **幂等性**: POST 创建支持 Idempotency-Key
+- [ ] **并发控制**: PUT/PATCH 使用 ETag + If-Match，冲突返回 412
+- [ ] **契约治理**: OpenAPI 已落盘并接入 lint + breaking-change CI
 - [ ] **CORS**: 跨域头部正确配置
 - [ ] **输入校验**: 所有输入在系统边界校验
 - [ ] **错误不泄漏**: 内部错误细节不暴露给客户端
@@ -623,6 +657,9 @@ go test -run '^$' -bench '^Benchmark' -benchtime=3s -count=5 -benchmem \
 ```bash
 # 编译检查
 go build ./goprincipleandpractise/api-design/...
+
+# OpenAPI lint + breaking-change 检查
+go test ./goprincipleandpractise/api-design/contract -v
 
 # 运行测试
 go test -race ./goprincipleandpractise/api-design/...

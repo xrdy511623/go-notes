@@ -12,12 +12,20 @@ type Response[T any] struct {
 	Meta *Meta `json:"meta,omitempty"`
 }
 
-// Meta 包含分页元数据。
+// Meta 包含分页和观测元数据。
 type Meta struct {
-	Total  int `json:"total"`
-	Page   int `json:"page"`
-	Limit  int `json:"limit"`
-	Offset int `json:"offset,omitempty"`
+	Total   int    `json:"total"`
+	Page    int    `json:"page"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset,omitempty"`
+	TraceID string `json:"trace_id,omitempty"`
+}
+
+// AuditFields 定义协议层审计字段。
+type AuditFields struct {
+	Subject string `json:"subject,omitempty"`
+	Tenant  string `json:"tenant,omitempty"`
+	Role    string `json:"role,omitempty"`
 }
 
 // ErrorResponse 是标准错误响应信封。
@@ -31,6 +39,9 @@ type ErrorBody struct {
 	Message string            `json:"message"`
 	Detail  string            `json:"detail,omitempty"`
 	Fields  map[string]string `json:"fields,omitempty"` // 字段级校验错误
+	TraceID string            `json:"trace_id,omitempty"`
+	Metric  string            `json:"metric,omitempty"`
+	Audit   *AuditFields      `json:"audit,omitempty"`
 }
 
 // writeJSON 将 v 序列化为 JSON 写入 w，设置 Content-Type 和状态码。
@@ -47,6 +58,9 @@ func WriteSuccess[T any](w http.ResponseWriter, status int, data T) {
 
 // WriteSuccessWithMeta 写入带分页的成功响应。
 func WriteSuccessWithMeta[T any](w http.ResponseWriter, data T, meta Meta) {
+	if meta.TraceID == "" {
+		meta.TraceID = traceIDFromHeader(w)
+	}
 	writeJSON(w, http.StatusOK, Response[T]{Data: data, Meta: &meta})
 }
 
@@ -57,6 +71,9 @@ func WriteError(w http.ResponseWriter, appErr *AppError) {
 			Code:    appErr.Code,
 			Message: appErr.Message,
 			Detail:  appErr.Detail,
+			TraceID: traceIDFromHeader(w),
+			Metric:  "http_request_errors_total",
+			Audit:   auditFromHeader(w),
 		},
 	}
 	writeJSON(w, appErr.Code.HTTPStatusCode(), resp)
@@ -69,6 +86,9 @@ func WriteValidationError(w http.ResponseWriter, fields map[string]string) {
 			Code:    ErrValidationFailed,
 			Message: "request validation failed",
 			Fields:  fields,
+			TraceID: traceIDFromHeader(w),
+			Metric:  "http_request_errors_total",
+			Audit:   auditFromHeader(w),
 		},
 	}
 	writeJSON(w, http.StatusUnprocessableEntity, resp)
@@ -77,4 +97,22 @@ func WriteValidationError(w http.ResponseWriter, fields map[string]string) {
 // WriteNoContent 写入 204 无内容响应。
 func WriteNoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func traceIDFromHeader(w http.ResponseWriter) string {
+	traceID := w.Header().Get("X-Trace-ID")
+	if traceID != "" {
+		return traceID
+	}
+	return w.Header().Get("X-Request-ID")
+}
+
+func auditFromHeader(w http.ResponseWriter) *AuditFields {
+	subject := w.Header().Get("X-Audit-Subject")
+	tenant := w.Header().Get("X-Audit-Tenant")
+	role := w.Header().Get("X-Audit-Role")
+	if subject == "" && tenant == "" && role == "" {
+		return nil
+	}
+	return &AuditFields{Subject: subject, Tenant: tenant, Role: role}
 }

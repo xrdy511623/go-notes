@@ -6,6 +6,7 @@ package apidesigngrpc
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -75,6 +76,7 @@ func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
 }
 
 // ListUsers 分页列出用户。
+// page_token 使用上一页最后一个用户 ID，服务端按 created_at + id 稳定排序。
 func (s *UserService) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*pb.ListUsersResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -91,26 +93,37 @@ func (s *UserService) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (
 	for _, u := range s.users {
 		all = append(all, u)
 	}
+	sort.SliceStable(all, func(i, j int) bool {
+		if all[i].CreatedAt.Equal(all[j].CreatedAt) {
+			return all[i].ID < all[j].ID
+		}
+		return all[i].CreatedAt.Before(all[j].CreatedAt)
+	})
 
-	// 简化分页: 用 offset 而非真正的 page token
 	start := 0
 	if req.PageToken != "" {
+		idx := -1
 		for i, u := range all {
 			if u.ID == req.PageToken {
-				start = i + 1
+				idx = i
 				break
 			}
 		}
+		if idx == -1 {
+			return nil, status.Error(codes.InvalidArgument, "invalid page_token")
+		}
+		start = idx + 1
 	}
 
+	if start > len(all) {
+		start = len(all)
+	}
 	end := start + pageSize
 	if end > len(all) {
 		end = len(all)
 	}
 
-	resp := &pb.ListUsersResponse{
-		Users: all[start:end],
-	}
+	resp := &pb.ListUsersResponse{Users: all[start:end]}
 	if end < len(all) {
 		resp.NextPageToken = all[end-1].ID
 	}

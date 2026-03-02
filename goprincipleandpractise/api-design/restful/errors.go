@@ -84,8 +84,11 @@ func (c ErrCode) HTTPStatusCode() int {
 
 // 预定义常用错误，避免重复创建。
 var (
-	ErrUserNotFound  = NewAppError(ErrNotFound, "user not found", nil)
-	ErrInvalidBody   = NewAppError(ErrInvalidJSON, "request body is not valid JSON", nil)
-	ErrAccessDenied  = NewAppError(ErrForbidden, "access denied", nil)
-	ErrServerFailure = NewAppError(ErrInternalError, "internal server error", nil)
+	ErrUserNotFound        = NewAppError(ErrNotFound, "user not found", nil)
+	ErrInvalidBody         = NewAppError(ErrInvalidJSON, "request body is not valid JSON", nil)
+	ErrUnauthorizedAccess  = NewAppError(ErrUnauthorized, "unauthorized", nil)
+	ErrAccessDenied        = NewAppError(ErrForbidden, "access denied", nil)
+	ErrPreconditionFailed  = NewAppError(ErrPrecondition, "precondition failed", nil)
+	ErrIdempotencyConflict = NewAppError(ErrConflict, "idempotency key conflict", nil)
+	ErrServerFailure       = NewAppError(ErrInternalError, "internal server error", nil)
 )

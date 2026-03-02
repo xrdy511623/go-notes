@@ -64,6 +64,57 @@ func TestUserServiceCRUD(t *testing.T) {
 	}
 }
 
+func TestUserServiceListUsersStableCursor(t *testing.T) {
+	svc := NewUserService()
+	ctx := context.Background()
+
+	for _, req := range []*pb.CreateUserRequest{
+		{Name: "C", Email: "c@example.com", Age: 1},
+		{Name: "A", Email: "a@example.com", Age: 2},
+		{Name: "B", Email: "b@example.com", Age: 3},
+	} {
+		if _, err := svc.CreateUser(ctx, req); err != nil {
+			t.Fatalf("CreateUser: %v", err)
+		}
+	}
+
+	page1, err := svc.ListUsers(ctx, &pb.ListUsersRequest{PageSize: 2})
+	if err != nil {
+		t.Fatalf("ListUsers page1: %v", err)
+	}
+	if len(page1.Users) != 2 {
+		t.Fatalf("page1 users=%d, want 2", len(page1.Users))
+	}
+	if page1.NextPageToken == "" {
+		t.Fatal("page1 expected next_page_token")
+	}
+
+	page2, err := svc.ListUsers(ctx, &pb.ListUsersRequest{PageSize: 2, PageToken: page1.NextPageToken})
+	if err != nil {
+		t.Fatalf("ListUsers page2: %v", err)
+	}
+	if len(page2.Users) != 1 {
+		t.Fatalf("page2 users=%d, want 1", len(page2.Users))
+	}
+
+	seen := map[string]bool{}
+	for _, u := range page1.Users {
+		seen[u.ID] = true
+	}
+	if seen[page2.Users[0].ID] {
+		t.Fatalf("duplicate user across pages: %s", page2.Users[0].ID)
+	}
+
+	_, err = svc.ListUsers(ctx, &pb.ListUsersRequest{PageSize: 2, PageToken: "bad-token"})
+	if err == nil {
+		t.Fatal("expected invalid page_token error")
+	}
+	st, _ := status.FromError(err)
+	if st.Code() != codes.InvalidArgument {
+		t.Fatalf("invalid token code=%v, want InvalidArgument", st.Code())
+	}
+}
+
 func TestUserServiceErrors(t *testing.T) {
 	svc := NewUserService()
 	ctx := context.Background()
