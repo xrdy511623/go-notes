@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path')\n\ncase \"$FILE\" in\n  *.go)\n    if gofmt -w \"$FILE\" && goimports -w \"$FILE\"; then\n      jq -n --arg f \"$FILE\" '{message: (\"Formatted: \" + $f)}'\n    else\n      jq -n --arg f \"$FILE\" '{error: (\"Format failed: \" + $f)}'\n    fi\n    ;;\n  *)\n    jq -n '{}'\n    ;;\nesac"
+          }
+        ]
+      }
+    ]
+  }
+}

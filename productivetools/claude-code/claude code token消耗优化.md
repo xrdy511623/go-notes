@@ -139,9 +139,9 @@ Claude Code 默认启用 extended thinking，预算可达 31,999 tokens； 官�
 
 skill 前言示例：
 ---
-name: review-pr
-description: 运行 PR review 清单（安全/性能/可维护性）
-disable-model-invocation: true
+- name: review-pr
+- description: 运行 PR review 清单（安全/性能/可维护性）
+- disable-model-invocation: true
 ---
 
 

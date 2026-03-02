@@ -34,7 +34,7 @@
 
 | 模块 | Markdown | Go 文件 | 图片 |
 | --- | ---: | ---: | ---: |
-| `goprincipleandpractise` | 35 | 194 | 128 |
+| `goprincipleandpractise` | 48 | 329 | 128 |
 | `middlewares` | 33 | 0 | 194 |
 | `designpattern` | 0 | 10 | 0 |
 | `enhancelinuxperformance` | 35 | 0 | 102 |
@@ -84,7 +84,7 @@ go test -run=^FuzzParseAge$ ./goprincipleandpractise/fuzzingtest
 优先阅读 `goprincipleandpractise/`：
 - 并发：`channel`、`sync`、`context`、`concurrency`
 - 数据结构与性能：`slice`、`map`、`string`、`struct`
-- 工程能力：`unit-test`、`benchmark`、`pprof-practise`、`fuzzingtest`、`codegen`、`project-layout`
+- 工程能力：`unit-test`、`benchmark`、`pprof-practise`、`fuzzingtest`、`codegen`、`project-layout`、`api-design`、`integration-test`、`e2e-test`、`database-sql`、`secure-coding`
 - 工程化：`makefile`、`ci-cd`、`docker`、`release`
 
 ### 2) 如果你在做后端基础设施
@@ -203,12 +203,14 @@ go-notes/
 ## 维护与更新
 
 - 文档 Owner：`Not found in repo`
-- CI workflows：`Not found in repo`（未发现 `.github/workflows`）
+- CI workflows：
+  - `.github/workflows/api-contract.yml`
 
 维护策略：
 1. 代码示例变化时同步更新相关文档和图片。
 2. 定期复查历史文档中的版本相关结论（Go / MySQL / Redis）。
 3. 对高频访问专题优先补充“反例 + 边界条件 + 验证命令”。
+4. 文档漂移检查：`Not found in repo`（未发现 markdown lint / link check / docs drift CI）。
 
 ## License
 
