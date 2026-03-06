@@ -6,13 +6,15 @@ import (
 	"go-notes/designpattern/registerfactory/sender"
 )
 
-type FeiShu struct{}
+type feishuSender struct{}
 
-func (f *FeiShu) Send(message string) error {
-	fmt.Printf("Using FeiShu send mesasge: %v\n", message)
+func (f *feishuSender) Send(message string) error {
+	fmt.Printf("Using FeiShu send message: %v\n", message)
 	return nil
 }
 
 func init() {
-	sender.Register("feishu", &FeiShu{})
+	sender.Register("feishu", func() sender.Sender {
+		return &feishuSender{}
+	})
 }

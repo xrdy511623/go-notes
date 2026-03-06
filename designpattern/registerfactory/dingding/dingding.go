@@ -6,13 +6,15 @@ import (
 	"go-notes/designpattern/registerfactory/sender"
 )
 
-type DingDing struct{}
+type dingSender struct{}
 
-func (d *DingDing) Send(message string) error {
+func (d *dingSender) Send(message string) error {
 	fmt.Printf("Using DingDing send message: %v\n", message)
 	return nil
 }
 
 func init() {
-	sender.Register("dingding", &DingDing{})
+	sender.Register("dingding", func() sender.Sender {
+		return &dingSender{}
+	})
 }

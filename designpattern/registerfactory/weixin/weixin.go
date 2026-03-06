@@ -6,13 +6,15 @@ import (
 	"go-notes/designpattern/registerfactory/sender"
 )
 
-type WeiXin struct{}
+type weixinSender struct{}
 
-func (w *WeiXin) Send(message string) error {
-	fmt.Printf("Using Weixin send message: %v\n", message)
+func (w *weixinSender) Send(message string) error {
+	fmt.Printf("Using WeiXin send message: %v\n", message)
 	return nil
 }
 
 func init() {
-	sender.Register("weixin", &WeiXin{})
+	sender.Register("weixin", func() sender.Sender {
+		return &weixinSender{}
+	})
 }

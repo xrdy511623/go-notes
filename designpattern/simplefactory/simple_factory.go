@@ -1,72 +1,85 @@
 package simplefactory
 
-import (
-	"fmt"
-)
+import "fmt"
+
+// Scene 标识消息发送渠道。
+type Scene int
 
 const (
-	unKnownScene = iota
-	dingdingScene
-	weixinScene
-	feishuScene
+	SceneDingDing Scene = iota + 1
+	SceneWeixin
+	SceneFeishu
 )
 
-/*
-依赖反转原则
-所谓依赖反转，是指高层模块不应该直接依赖于低层模块的具体实现，两者都应该依赖于接口。这样当低层模块需要
-更换或升级时，只要新的模块仍然满足高层模块所依赖的接口，就不会影响高层模块的正常运行。
-*/
+// String 返回 Scene 的可读名称，实现 fmt.Stringer 接口。
+func (s Scene) String() string {
+	switch s {
+	case SceneDingDing:
+		return "dingding"
+	case SceneWeixin:
+		return "weixin"
+	case SceneFeishu:
+		return "feishu"
+	default:
+		return fmt.Sprintf("Scene(%d)", int(s))
+	}
+}
 
-/*
-简单工厂方法模式的实质是由一个工厂方法根据传入的参数，动态决定应该创建哪一个结构体（这些结构体实现了同一个接口）的实例。
-*/
+// Scenes 返回所有已定义的 Scene 常量。
+func Scenes() []Scene {
+	return []Scene{SceneDingDing, SceneWeixin, SceneFeishu}
+}
 
+// Sender 是消息发送的统一接口。
 type Sender interface {
 	Send(message string) error
 }
 
-type DingDing struct{}
+// --- 具体实现 ---
 
-func (d *DingDing) Send(message string) error {
-	fmt.Printf("Using DingDing to send message:%v\n", message)
+type dingDingSender struct{}
+
+func (d *dingDingSender) Send(message string) error {
+	fmt.Printf("Using DingDing to send message: %v\n", message)
 	return nil
 }
 
-type Weixin struct{}
+type weixinSender struct{}
 
-func (w *Weixin) Send(message string) error {
-	fmt.Printf("Using Weixin to send message:%v\n", message)
+func (w *weixinSender) Send(message string) error {
+	fmt.Printf("Using Weixin to send message: %v\n", message)
 	return nil
 }
 
-type Feishu struct{}
+type feishuSender struct{}
 
-func (w *Feishu) Send(message string) error {
-	fmt.Printf("Using Feishu to send message:%v\n", message)
+func (f *feishuSender) Send(message string) error {
+	fmt.Printf("Using Feishu to send message: %v\n", message)
 	return nil
 }
 
-// NewSendMessageService 简单工厂方法，根据传入参数创建同类对象
-func NewSendMessageService(scene int) Sender {
-	var impl Sender
+// NewSender 是简单工厂函数：根据 scene 参数决定创建哪种 Sender。
+// 未知的 scene 返回错误而非 nil，避免调用方 nil-pointer panic。
+func NewSender(scene Scene) (Sender, error) {
 	switch scene {
-	case dingdingScene:
-		// 使用钉钉发送消息
-		impl = new(DingDing)
-	case weixinScene:
-		// 使用微信发送消息
-		impl = new(Weixin)
-	case feishuScene:
-		// 使用飞书发送消息
-		impl = new(Feishu)
+	case SceneDingDing:
+		return &dingDingSender{}, nil
+	case SceneWeixin:
+		return &weixinSender{}, nil
+	case SceneFeishu:
+		return &feishuSender{}, nil
 	default:
-		return nil
+		return nil, fmt.Errorf("simplefactory: unknown scene %v", scene)
 	}
-	return impl
 }
 
-func SendMessage(scene int, message string) error {
-	// 调用简单工厂方法创建对象
-	impl := NewSendMessageService(scene)
-	return impl.Send(message)
+// MustNewSender 与 NewSender 相同，但在失败时 panic。
+// 适用于程序启动阶段，scene 已知且不应出错的场景。
+// 设计参考：regexp.MustCompile、template.Must。
+func MustNewSender(scene Scene) Sender {
+	s, err := NewSender(scene)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
