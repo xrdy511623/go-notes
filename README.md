@@ -34,9 +34,9 @@
 
 | 模块 | Markdown | Go 文件 | 图片 |
 | --- | ---: | ---: | ---: |
-| `goprincipleandpractise` | 48 | 329 | 128 |
+| `goprincipleandpractise` | 49 | 338 | 128 |
 | `middlewares` | 33 | 0 | 194 |
-| `designpattern` | 0 | 10 | 0 |
+| `designpattern` | 26 | 134 | 0 |
 | `enhancelinuxperformance` | 35 | 0 | 102 |
 | `productivetools` | 11 | 0 | 197 |
 | `shellscripts` | 6 | 0 | 2 |
@@ -57,6 +57,10 @@ go mod download
 # 运行并发专题性能测试
 go test ./goprincipleandpractise/channel/performance
 go test ./goprincipleandpractise/context/performance
+
+# 运行设计模式目录中的示例与测试
+go run ./designpattern
+go test ./designpattern/...
 
 # 运行新增专题示例测试
 go test ./goprincipleandpractise/concurrency/pattern \
@@ -134,7 +138,8 @@ go test -run=^FuzzParseAge$ ./goprincipleandpractise/fuzzingtest
 - `goprincipleandpractise/release/` — 版本管理与发布流程（goreleaser / viper / ldflags）
 
 ### 设计模式与工程工具
-- `designpattern/`（示例代码）
+- `designpattern/README.md` — 25 种常用设计模式、并发模式与韧性模式总览
+- `designpattern/` — 模式文档、可运行示例、`trap/` 反例与配套测试
 - `productivetools/`（效率工具与实践）
 
 ### Shell 与软技能
@@ -166,7 +171,7 @@ go-notes/
 │   └── ...
 ├── middlewares/                        # MySQL / Redis / Kafka 专题
 ├── enhancelinuxperformance/            # Linux 性能优化 35 篇系列
-├── designpattern/                      # 设计模式示例代码
+├── designpattern/                      # 设计模式文档、示例代码与测试
 ├── productivetools/                    # Git/Vim/IDE/终端/AI 工具实践
 ├── shellscripts/                       # Shell 基础与脚本实践
 ├── softskill/                          # 软技能（技术写作）
@@ -202,15 +207,10 @@ go-notes/
 
 ## 维护与更新
 
-- 文档 Owner：`Not found in repo`
-- CI workflows：
-  - `.github/workflows/api-contract.yml`
-
 维护策略：
 1. 代码示例变化时同步更新相关文档和图片。
 2. 定期复查历史文档中的版本相关结论（Go / MySQL / Redis）。
 3. 对高频访问专题优先补充“反例 + 边界条件 + 验证命令”。
-4. 文档漂移检查：`Not found in repo`（未发现 markdown lint / link check / docs drift CI）。
 
 ## License
 
