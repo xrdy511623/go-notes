@@ -10,12 +10,12 @@ import "testing"
 go test -benchmem . -bench="Convert$"
 16 32 64 128 256 512 896 1408 2048 3072 4096 5376 6912 9472 12288 16384 21760 28672 40960 57344 73728 98304 131072 goos: darwin
 goarch: arm64
-pkg: go-notes/goprincipleandpractise/string/performance
+pkg: go-notes/gocore/string/performance
 cpu: Apple M4
 BenchmarkSprintConvert-10           3524            343682 ns/op          320585 B/op      19735 allocs/op
 BenchmarkStrconvConvert-10         10000            112317 ns/op          202721 B/op       9901 allocs/op
 PASS
-ok      go-notes/goprincipleandpractise/string/performance      2.571s
+ok      go-notes/gocore/string/performance      2.571s
 */
 
 func BenchmarkSprintConvert(b *testing.B)  { BenchmarkConvert(b, ConvertIntToStringSprint) }

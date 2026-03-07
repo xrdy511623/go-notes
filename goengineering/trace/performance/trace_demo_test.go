@@ -13,7 +13,7 @@ import (
 //
 // 运行方式:
 //
-//	go test -v -run TestTraceDemo ./goprincipleandpractise/trace/performance/
+//	go test -v -run TestTraceDemo ./goengineering/trace/performance/
 //
 // 生成 trace.out 后查看:
 //
@@ -67,7 +67,7 @@ func TestTraceDemo(t *testing.T) {
 //
 // 运行方式:
 //
-//	go test -v -run TestTraceLog ./goprincipleandpractise/trace/performance/
+//	go test -v -run TestTraceLog ./goengineering/trace/performance/
 //
 // 生成 trace_log.out 后查看:
 //

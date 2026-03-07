@@ -12,7 +12,7 @@ import (
 //
 // 运行:
 //
-//	go test -v -run TestManualCPUProfile ./goprincipleandpractise/pprof-practise/performance/
+//	go test -v -run TestManualCPUProfile ./goengineering/pprof-practise/performance/
 //
 // 查看:
 //
@@ -44,7 +44,7 @@ func TestManualCPUProfile(t *testing.T) {
 //
 // 运行:
 //
-//	go test -v -run TestManualHeapProfile ./goprincipleandpractise/pprof-practise/performance/
+//	go test -v -run TestManualHeapProfile ./goengineering/pprof-practise/performance/
 //
 // 查看:
 //

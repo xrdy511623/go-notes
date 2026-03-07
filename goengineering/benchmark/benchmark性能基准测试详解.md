@@ -241,7 +241,7 @@ benchstat old.txt new.txt
  benchstat old.txt new.txt
 goos: darwin
 goarch: arm64
-pkg: go-notes/goprincipleandpractise/slice/performance
+pkg: go-notes/goengineering/slice/performance
 cpu: Apple M4
           │        old.txt        │                new.txt                │
           │        sec/op         │    sec/op     vs base                 │

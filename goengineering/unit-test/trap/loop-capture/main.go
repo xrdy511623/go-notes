@@ -6,7 +6,7 @@
 // Go 1.22+ 改变了语义：每次迭代创建新的变量，此问题不再存在。
 // 本仓库使用 Go 1.24，但为教学目的保留此演示。
 //
-// 运行方式：go run ./goprincipleandpractise/unit-test/trap/loop-capture/
+// 运行方式：go run ./goengineering/unit-test/trap/loop-capture/
 package main
 
 import (

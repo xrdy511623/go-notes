@@ -12,7 +12,7 @@ import (
 go test -bench=^Bench -benchtime=3s -benchmem .
 goos: darwin
 goarch: arm64
-pkg: go-notes/goprincipleandpractise/struct/performance/value-vs-pointer
+pkg: go-notes/gocore/struct/performance/value-vs-pointer
 cpu: Apple M4
 BenchmarkSmallValue-10          1000000000               3.000 ns/op           0 B/op          0 allocs/op
 BenchmarkSmallPointer-10        1000000000               3.000 ns/op           0 B/op          0 allocs/op
@@ -21,7 +21,7 @@ BenchmarkMediumPointer-10       1000000000               3.000 ns/op           0
 BenchmarkLargeValue-10          253027470               14.22 ns/op            0 B/op          0 allocs/op
 BenchmarkLargePointer-10        1000000000               3.000 ns/op           0 B/op          0 allocs/op
 PASS
-ok      go-notes/goprincipleandpractise/struct/performance/value-vs-pointer     18.869s
+ok      go-notes/gocore/struct/performance/value-vs-pointer     18.869s
 
 对比维度:
   - Small (16B): 值传递 vs 指针传递

@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "go-notes/goprincipleandpractise/api-design/grpc/pb"
+	pb "go-notes/goengineering/api-design/grpc/pb"
 )
 
 // UserService 实现用户管理 gRPC 服务。

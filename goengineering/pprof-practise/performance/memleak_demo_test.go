@@ -10,7 +10,7 @@ import (
 //
 // 运行:
 //
-//	go test -v -run TestGoroutineLeakDemo ./goprincipleandpractise/pprof-practise/performance/
+//	go test -v -run TestGoroutineLeakDemo ./goengineering/pprof-practise/performance/
 func TestGoroutineLeakDemo(t *testing.T) {
 	before := runtime.NumGoroutine()
 	t.Logf("初始 goroutine 数: %d", before)
@@ -42,7 +42,7 @@ func TestGoroutineLeakDemo(t *testing.T) {
 //
 // 运行:
 //
-//	go test -v -run TestTimeAfterLeakDemo ./goprincipleandpractise/pprof-practise/performance/
+//	go test -v -run TestTimeAfterLeakDemo ./goengineering/pprof-practise/performance/
 func TestTimeAfterLeakDemo(t *testing.T) {
 	// 错误方式: 循环中使用 time.After（每次创建新 timer，旧的无法被回收直到触发）
 	var leakedTimers int

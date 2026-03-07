@@ -11,6 +11,6 @@ CLAUDE.md
 .claude
 
 # Generated profiling/trace artifacts
-goprincipleandpractise/pprof-practise/performance/*.prof
-goprincipleandpractise/pprof-practise/performance/trace.out
-goprincipleandpractise/trace/performance/*.out
+goengineering/pprof-practise/performance/*.prof
+goengineering/pprof-practise/performance/trace.out
+goengineering/trace/performance/*.out

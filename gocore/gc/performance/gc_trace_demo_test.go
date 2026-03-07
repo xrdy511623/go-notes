@@ -20,8 +20,8 @@ func printMemStats(label string) {
 }
 
 // TestGCTraceDemo 演示如何通过 runtime.ReadMemStats 观测 GC 行为
-// 运行方式: go test -v -run TestGCTraceDemo ./goprincipleandpractise/gc/performance/
-// 配合 gctrace: GODEBUG=gctrace=1 go test -v -run TestGCTraceDemo ./goprincipleandpractise/gc/performance/
+// 运行方式: go test -v -run TestGCTraceDemo ./gocore/gc/performance/
+// 配合 gctrace: GODEBUG=gctrace=1 go test -v -run TestGCTraceDemo ./gocore/gc/performance/
 func TestGCTraceDemo(t *testing.T) {
 	printMemStats("初始状态")
 

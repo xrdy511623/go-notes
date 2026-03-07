@@ -3,7 +3,7 @@ package mouse
 import (
 	"log"
 
-	"go-notes/goprincipleandpractise/pprof-practise/constant"
+	"go-notes/goengineering/pprof-practise/constant"
 )
 
 type Mouse struct {

@@ -7,7 +7,7 @@ import (
 )
 
 // TestBallastEffect 演示 ballast 对 GC 频率的影响
-// 运行: go test -v -run TestBallastEffect ./goprincipleandpractise/gc/performance/
+// 运行: go test -v -run TestBallastEffect ./gocore/gc/performance/
 func TestBallastEffect(t *testing.T) {
 	allocateAndCountGC := func(label string, ballastSize int) {
 		// 可选的 ballast

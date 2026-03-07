@@ -8,7 +8,7 @@ import (
 )
 
 // TestGOMEMLIMITEffect 演示 GOMEMLIMIT 对 GC 行为的影响
-// 运行: go test -v -run TestGOMEMLIMITEffect ./goprincipleandpractise/gc/performance/
+// 运行: go test -v -run TestGOMEMLIMITEffect ./gocore/gc/performance/
 func TestGOMEMLIMITEffect(t *testing.T) {
 	allocateAndMeasure := func(label string) {
 		var before runtime.MemStats

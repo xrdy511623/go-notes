@@ -5,8 +5,8 @@ import "testing"
 // ---------- 基准测试：接口调用 vs 直接调用 ----------
 //
 // 运行方式：
-//   go test -bench=. -benchmem ./goprincipleandpractise/unit-test/performance/
-//   go test -bench=. -benchtime=3s -count=5 -benchmem ./goprincipleandpractise/unit-test/performance/
+//   go test -bench=. -benchmem ./goengineering/unit-test/performance/
+//   go test -bench=. -benchtime=3s -count=5 -benchmem ./goengineering/unit-test/performance/
 //
 // 预期结果：两者性能差异在纳秒级，证明接口抽象的开销可忽略。
 
@@ -14,14 +14,14 @@ import "testing"
 go test -bench=^Bench -benchtime=3s -benchmem .
 goos: darwin
 goarch: arm64
-pkg: go-notes/goprincipleandpractise/unit-test/performance
+pkg: go-notes/goengineering/unit-test/performance
 cpu: Apple M4
 BenchmarkDirectCall-10                  1000000000               3.000 ns/op           0 B/op          0 allocs/op
 BenchmarkInterfaceCall-10               1000000000               3.000 ns/op           0 B/op          0 allocs/op
 BenchmarkInterfaceCall_NoInline-10      1000000000               3.000 ns/op           0 B/op          0 allocs/op
 BenchmarkDirectCall_NoInline-10         1000000000               3.000 ns/op           0 B/op          0 allocs/op
 PASS
-ok      go-notes/goprincipleandpractise/unit-test/performance   12.143s
+ok      go-notes/goengineering/unit-test/performance   12.143s
 */
 
 func BenchmarkDirectCall(b *testing.B) {

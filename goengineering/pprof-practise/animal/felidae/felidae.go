@@ -1,6 +1,6 @@
 package felidae
 
-import "go-notes/goprincipleandpractise/pprof-practise/animal"
+import "go-notes/goengineering/pprof-practise/animal"
 
 type Felidae interface {
 	animal.Animal

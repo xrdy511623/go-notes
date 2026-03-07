@@ -1,6 +1,6 @@
 package muridae
 
-import "go-notes/goprincipleandpractise/pprof-practise/animal"
+import "go-notes/goengineering/pprof-practise/animal"
 
 type Muridae interface {
 	animal.Animal

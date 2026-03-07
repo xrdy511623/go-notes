@@ -9,15 +9,15 @@ import (
 // 本文件演示 benchmark + pprof 联动用法
 //
 // 生成 CPU profile:
-//   go test -bench=BenchmarkConcat -cpuprofile=cpu.prof -benchmem ./goprincipleandpractise/pprof-practise/performance/
+//   go test -bench=BenchmarkConcat -cpuprofile=cpu.prof -benchmem ./goengineering/pprof-practise/performance/
 //   go tool pprof cpu.prof
 //
 // 生成内存 profile:
-//   go test -bench=BenchmarkConcat -memprofile=mem.prof -benchmem ./goprincipleandpractise/pprof-practise/performance/
+//   go test -bench=BenchmarkConcat -memprofile=mem.prof -benchmem ./goengineering/pprof-practise/performance/
 //   go tool pprof -alloc_objects mem.prof
 //
 // 生成 trace:
-//   go test -bench=BenchmarkConcat -trace=trace.out ./goprincipleandpractise/pprof-practise/performance/
+//   go test -bench=BenchmarkConcat -trace=trace.out ./goengineering/pprof-practise/performance/
 //   go tool trace trace.out
 
 // concatWithPlus 使用 + 拼接字符串（每次创建新字符串，大量内存分配）
@@ -53,7 +53,7 @@ func BenchmarkConcatBuilder(b *testing.B) {
 
 /*
 运行并生成 profile:
-  go test -bench=BenchmarkConcat -cpuprofile=cpu.prof -memprofile=mem.prof -benchmem ./goprincipleandpractise/pprof-practise/performance/
+  go test -bench=BenchmarkConcat -cpuprofile=cpu.prof -memprofile=mem.prof -benchmem ./goengineering/pprof-practise/performance/
 
 分析 CPU:
   go tool pprof cpu.prof

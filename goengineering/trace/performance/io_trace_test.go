@@ -20,7 +20,7 @@ import (
 //
 // 运行方式:
 //
-//	go test -v -run TestIOTrace ./goprincipleandpractise/trace/performance/
+//	go test -v -run TestIOTrace ./goengineering/trace/performance/
 //
 // 生成 io_trace.out 后查看:
 //

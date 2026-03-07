@@ -13,13 +13,13 @@ go test -run '^$' -bench 'Substring' -benchmem .
 
 goos: darwin
 goarch: arm64
-pkg: go-notes/goprincipleandpractise/string/performance
+pkg: go-notes/gocore/string/performance
 cpu: Apple M4
 BenchmarkSubstringDirect-10             1000000000               1.021 ns/op           0 B/op          0 allocs/op
 BenchmarkSubstringClone-10              141173702                8.455 ns/op          32 B/op          1 allocs/op
 BenchmarkSubstringConcatCopy-10         133219096                9.021 ns/op          32 B/op          1 allocs/op
 PASS
-ok      go-notes/goprincipleandpractise/string/performance      3.561s
+ok      go-notes/gocore/string/performance      3.561s
 
 
 对比维度:

@@ -1,11 +1,11 @@
 package animal
 
 import (
-	"go-notes/goprincipleandpractise/pprof-practise/animal/canidae/dog"
-	"go-notes/goprincipleandpractise/pprof-practise/animal/canidae/wolf"
-	"go-notes/goprincipleandpractise/pprof-practise/animal/felidae/cat"
-	"go-notes/goprincipleandpractise/pprof-practise/animal/felidae/tiger"
-	"go-notes/goprincipleandpractise/pprof-practise/animal/muridae/mouse"
+	"go-notes/goengineering/pprof-practise/animal/canidae/dog"
+	"go-notes/goengineering/pprof-practise/animal/canidae/wolf"
+	"go-notes/goengineering/pprof-practise/animal/felidae/cat"
+	"go-notes/goengineering/pprof-practise/animal/felidae/tiger"
+	"go-notes/goengineering/pprof-practise/animal/muridae/mouse"
 )
 
 var (

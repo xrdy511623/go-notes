@@ -23,7 +23,7 @@ go test -run TestMapNoShrink -v
 
 --- PASS: TestMapNoShrink (0.13s)
 PASS
-ok      go-notes/goprincipleandpractise/map/trap/no-shrink      0.600s
+ok      go-notes/gocore/map/trap/no-shrink      0.600s
 */
 func TestMapNoShrink(t *testing.T) {
 	const N = 1_000_000

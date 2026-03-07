@@ -7,7 +7,7 @@
 //
 // 检测方法：比较测试前后的 runtime.NumGoroutine()
 //
-// 运行方式：go run ./goprincipleandpractise/unit-test/trap/goroutine-leak/
+// 运行方式：go run ./goengineering/unit-test/trap/goroutine-leak/
 package main
 
 import (

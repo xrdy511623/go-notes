@@ -12,7 +12,7 @@ import (
 //
 // 运行方式:
 //
-//	go test -v -run TestTraceDemo ./goprincipleandpractise/pprof-practise/performance/
+//	go test -v -run TestTraceDemo ./goengineering/pprof-practise/performance/
 //
 // 生成 trace.out 后查看:
 //

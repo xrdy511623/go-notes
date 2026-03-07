@@ -645,28 +645,28 @@ if len(valid) >= rl.limit {
 ```bash
 # 序列化对比
 go test -run '^$' -bench '^Benchmark' -benchtime=3s -count=5 -benchmem \
-  ./goprincipleandpractise/api-design/performance/json-vs-protobuf/
+  ./goengineering/api-design/performance/json-vs-protobuf/
 
 # 校验对比
 go test -run '^$' -bench '^Benchmark' -benchtime=3s -count=5 -benchmem \
-  ./goprincipleandpractise/api-design/performance/validation/
+  ./goengineering/api-design/performance/validation/
 ```
 
 ### 9.4 运行所有示例
 
 ```bash
 # 编译检查
-go build ./goprincipleandpractise/api-design/...
+go build ./goengineering/api-design/...
 
 # OpenAPI lint + breaking-change 检查
-go test ./goprincipleandpractise/api-design/contract -v
+go test ./goengineering/api-design/contract -v
 
 # 运行测试
-go test -race ./goprincipleandpractise/api-design/...
+go test -race ./goengineering/api-design/...
 
 # 运行陷阱示例
-go run ./goprincipleandpractise/api-design/trap/verb-url/
-go run ./goprincipleandpractise/api-design/trap/inconsistent-error/
-go run ./goprincipleandpractise/api-design/trap/missing-idempotency/
-go run ./goprincipleandpractise/api-design/trap/leak-internal-error/
+go run ./goengineering/api-design/trap/verb-url/
+go run ./goengineering/api-design/trap/inconsistent-error/
+go run ./goengineering/api-design/trap/missing-idempotency/
+go run ./goengineering/api-design/trap/leak-internal-error/
 ```

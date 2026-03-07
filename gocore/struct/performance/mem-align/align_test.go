@@ -13,12 +13,12 @@ struct 字段排列顺序对性能的影响
 go test -run '^$' -bench '^Benchmark' -benchtime=10s -benchmem
 goos: darwin
 goarch: arm64
-pkg: go-notes/goprincipleandpractise/struct/performance/mem-align
+pkg: go-notes/gocore/struct/performance/mem-align
 cpu: Apple M4
 BenchmarkUseOrderStruct-10               1000000             11438 ns/op          163840 B/op          1 allocs/op
 BenchmarkUseDisOrderStruct-10             911826             13692 ns/op          245760 B/op          1 allocs/op
 PASS
-ok      go-notes/goprincipleandpractise/struct/performance/mem-align    24.077s
+ok      go-notes/gocore/struct/performance/mem-align    24.077s
 
 对比维度:
   - order (16 字节): 字段按对齐倍数从小到大排列，无浪费

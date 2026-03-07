@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	"go-notes/goprincipleandpractise/pprof-practise/animal"
+	"go-notes/goengineering/pprof-practise/animal"
 )
 
 func main() {

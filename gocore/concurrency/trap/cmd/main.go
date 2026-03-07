@@ -1,6 +1,6 @@
 package main
 
-import "go-notes/goprincipleandpractise/concurrency/trap"
+import "go-notes/gocore/concurrency/trap"
 
 func main() {
 	trap.RunAllTraps()

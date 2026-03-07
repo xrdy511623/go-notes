@@ -6,7 +6,7 @@
 // 2. 加 -count=N 出现间歇性失败
 // 3. 加 -shuffle 随机失败
 //
-// 运行方式：go run ./goprincipleandpractise/unit-test/trap/test-pollution/
+// 运行方式：go run ./goengineering/unit-test/trap/test-pollution/
 package main
 
 import "fmt"

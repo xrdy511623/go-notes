@@ -34,7 +34,7 @@ func BenchmarkWithPool(b *testing.B) {
 
 /*
 运行:
-go test -bench=Pool -benchmem ./goprincipleandpractise/gc/performance/
+go test -bench=Pool -benchmem ./gocore/gc/performance/
 
 预期结果:
 BenchmarkWithoutPool 的 allocs/op 明显高于 BenchmarkWithPool，

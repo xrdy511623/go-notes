@@ -11,7 +11,7 @@ import (
 // Pool 的价值不是消除逃逸，而是通过复用减少分配次数，从而降低 GC 压力。
 //
 // 逃逸分析:
-//   go build -gcflags=-m ./goprincipleandpractise/gc/escape-analyse/06-sync-pool/
+//   go build -gcflags=-m ./gocore/gc/escape-analyse/06-sync-pool/
 //
 // 预期输出:
 //   &bytes.Buffer{} escapes to heap  (因为赋值给 interface{})

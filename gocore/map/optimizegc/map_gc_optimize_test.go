@@ -28,7 +28,7 @@ import (
     map_gc_optimize_test.go:95: size 5000000 GC duration: 44.831416ms
 --- PASS: TestBigStruct (0.77s)
 PASS
-ok      go-notes/goprincipleandpractise/map/optimizegc  3.551s
+ok      go-notes/gocore/map/optimizegc  3.551s
 
 为什么使用int类型作为键值对的map性能会好很多呢？
 因为：
