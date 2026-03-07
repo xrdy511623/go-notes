@@ -155,11 +155,19 @@ func TestConcurrentRegisterAndNew(t *testing.T) {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			defer func() { recover() }()
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Register(%q) unexpected panic: %v", name, r)
+				}
+			}()
 			Register(name, newStubFactory(name))
 		}(name)
 	}
 	wg.Wait()
+
+	if got := Count(); got != n {
+		t.Fatalf("expected %d registrations, got %d", n, got)
+	}
 
 	for _, name := range List() {
 		wg.Add(1)
