@@ -8,6 +8,7 @@ runtime/
 .DS_Store
 CLAUDE.md
 .claudeignore
+.claude
 
 # Generated profiling/trace artifacts
 goprincipleandpractise/pprof-practise/performance/*.prof
