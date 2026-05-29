@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-notes/designpattern/simplefactory"
 	"io"
 	stdlog "log"
 	"net/http"
@@ -68,8 +69,18 @@ import (
 )
 
 func main() {
-	// 注册工厂模式示例
-	s, err := sender.New("dingding")
+	// 简单工厂模式示例
+	s, err := simplefactory.NewSender(1)
+	if err != nil {
+		fmt.Printf("sender.New err: %v\n", err)
+		return
+	}
+	_ = s.Send("hello")
+	// 注册工厂模式示例 — 参数化构造
+	s, err = sender.New("dingding", sender.Config{
+		"webhook": "https://oapi.dingtalk.com/robot/send",
+		"token":   "my-token",
+	})
 	if err != nil {
 		fmt.Printf("sender.New err: %v\n", err)
 		return
@@ -77,6 +88,15 @@ func main() {
 	if err := s.Send("Hello"); err != nil {
 		fmt.Printf("sender.Send err: %v\n", err)
 	}
+
+	// 生命周期管理 — 可选接口断言
+	if c, ok := s.(sender.Closer); ok {
+		defer c.Close()
+	}
+
+	// 动态注销
+	sender.Unregister("dingding")
+	fmt.Printf("注销后可用 sender: %v\n", sender.List())
 
 	// 观察者模式示例
 	bus := eventbus.New()

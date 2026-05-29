@@ -1,33 +1,30 @@
 package simplefactory
 
+//go:generate stringer -type=Scene -linecomment
+
 import "fmt"
 
 // Scene 标识消息发送渠道。
 type Scene int
 
 const (
-	SceneDingDing Scene = iota + 1
-	SceneWeixin
-	SceneFeishu
+	SceneDingDing Scene = iota + 1 // dingding
+	SceneWeixin                    // weixin
+	SceneFeishu                    // feishu
 )
 
-// String 返回 Scene 的可读名称，实现 fmt.Stringer 接口。
-func (s Scene) String() string {
-	switch s {
-	case SceneDingDing:
-		return "dingding"
-	case SceneWeixin:
-		return "weixin"
-	case SceneFeishu:
-		return "feishu"
-	default:
-		return fmt.Sprintf("Scene(%d)", int(s))
-	}
-}
+// _maxScene 标记枚举上界，供 Scenes() 自动枚举使用。
+// 定义为无类型常量，stringer 不会将其纳入 String() 生成。
+const _maxScene = SceneFeishu + 1
 
 // Scenes 返回所有已定义的 Scene 常量。
+// 实现依赖 _maxScene 哨兵自动枚举，新增常量无需修改本函数。
 func Scenes() []Scene {
-	return []Scene{SceneDingDing, SceneWeixin, SceneFeishu}
+	out := make([]Scene, 0, int(_maxScene)-1)
+	for i := Scene(1); i < _maxScene; i++ {
+		out = append(out, i)
+	}
+	return out
 }
 
 // Sender 是消息发送的统一接口。
